@@ -1,4 +1,5 @@
 @inject IWorkDayService WorkDayService
+@inject ICapacitySettings CapacitySettings
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -6,7 +7,7 @@
         <MudStack Spacing="3">
             <MudText>@(WorkDays.Year)年 @(WorkDays.Month)月</MudText>
             <MudNumericField T="int" @bind-Value="WorkDays.WorkDays" Label="稼働日数（日）" Min="0" Max="31" Required="true" />
-            <MudText Typo="Typo.caption">最大開発可能: @(WorkDays.WorkDays * 8m * 0.9m) h</MudText>
+            <MudText Typo="Typo.caption">最大開発可能: @(WorkDays.WorkDays * 8m * CapacitySettings.Coefficient) h</MudText>
         </MudStack>
     </DialogContent>
     <DialogActions>

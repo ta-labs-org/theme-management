@@ -24,6 +24,8 @@ builder.Services.AddScoped<IWorkDayService, WorkDayService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
 builder.Services.AddScoped<IAllocationService, AllocationService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddSingleton<IJapaneseBusinessDayService, JapaneseBusinessDayService>();
+builder.Services.AddSingleton<ICapacitySettings, CapacitySettings>();
 
 var app = builder.Build();
 

@@ -2,8 +2,213 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
+/* ===== 半期見込計算テーブル ===== */
+.forecast-container {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.forecast-panel {
+    flex: 1;
+    min-width: 420px;
+    overflow: hidden;
+}
+
+.forecast-table {
+    border-collapse: collapse;
+    white-space: nowrap;
+    font-size: 0.85rem;
+    width: 100%;
+}
+
+.forecast-table th {
+    background: #1976d2;
+    color: #fff;
+    padding: 6px 8px;
+    text-align: center;
+    border: 1px solid #1565c0;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.forecast-table td {
+    padding: 3px 6px;
+    border: 1px solid #e0e0e0;
+    vertical-align: middle;
+}
+
+.col-name  { min-width: 100px; text-align: left; }
+.col-month { min-width: 72px; }
+.col-total { min-width: 72px; }
+
+.cell-group-name {
+    background: #e3f2fd;
+    font-weight: 600;
+    text-align: center;
+    border-right: 2px solid #90caf9;
+}
+
+.cell-sub-name {
+    background: #f5f5f5;
+    padding-left: 10px;
+}
+
+.cell-input {
+    padding: 2px 4px;
+    text-align: center;
+}
+
+.cell-total {
+    background: #e8f5e9;
+    text-align: center;
+    font-weight: 600;
+    color: #2e7d32;
+}
+
+.alloc-input {
+    width: 60px;
+    border: 1px solid #bdbdbd;
+    border-radius: 4px;
+    padding: 2px 4px;
+    text-align: center;
+    font-size: 0.85rem;
+    background: #fff;
+    transition: border-color 0.2s;
+}
+
+.alloc-input:focus {
+    outline: none;
+    border-color: #1976d2;
+    background: #e3f2fd;
+}
+
+.alloc-input::-webkit-inner-spin-button,
+.alloc-input::-webkit-outer-spin-button {
+    opacity: 0.5;
+}
+
+.row-eng-last td {
+    border-bottom: 2px solid #90caf9;
+}
+
+.row-subtotal td {
+    background: #fff9c4;
+    font-weight: 700;
+    text-align: center;
+    color: #f57f17;
+    border-top: 2px solid #ffe082;
+    border-bottom: 3px solid #ffd54f;
+}
+
+/* 稼働上限行 */
+.row-capacity td {
+    background: #e0f7fa;
+    font-size: 0.78rem;
+    text-align: center;
+    color: #00695c;
+    border-bottom: 2px solid #80deea;
+    font-style: italic;
+}
+
+/* 稼働上限超過セル */
+.cell-over-capacity {
+    background: #ffebee !important;
+    color: #b71c1c !important;
+    font-weight: 700;
+}
+
+/* 完了予定月超過セル（入力可・警告のみ） */
+.cell-past-deadline {
+    background: #fff3e0 !important;
+}
+.cell-past-deadline .alloc-input {
+    background: #ffe0b2 !important;
+    border-color: #fb8c00 !important;
+}
+
+/* テーマコスト試算行 */
+.row-theme-cost td {
+    background: #fafafa;
+    font-size: 0.8rem;
+    color: #555;
+    border-bottom: 3px solid #bdbdbd;
+    padding: 4px 8px;
+}
+.row-over-budget td {
+    background: #ffebee !important;
+    color: #b71c1c !important;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-bottom: 3px solid #ef9a9a;
+    padding: 4px 8px;
+}
+
+/* テーマグループヘッダー内メタ情報 */
+.theme-meta {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: #1565c0;
+    margin-top: 4px;
+    line-height: 1.5;
+}
+
 a, .btn-link {
     color: #006bb7;
+}
+
+/* ===== 稼働日管理 複数月テーブル ===== */
+.workday-table-wrapper {
+    overflow-x: auto;
+}
+.workday-table {
+    border-collapse: collapse;
+    min-width: 500px;
+}
+.workday-table th,
+.workday-table td {
+    border: 1px solid #e0e0e0;
+    padding: 6px 10px;
+    text-align: center;
+    white-space: nowrap;
+}
+.workday-table th {
+    background: #f5f5f5;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+.workday-table .wd-label-col {
+    text-align: left;
+    min-width: 140px;
+    font-weight: 500;
+    background: #fafafa;
+}
+.workday-table .wd-eng-name {
+    font-size: 0.88rem;
+}
+.workday-table .wd-row-calc td {
+    background: #e0f7fa;
+    color: #00695c;
+    font-size: 0.82rem;
+    font-style: italic;
+}
+.workday-table .wd-cell-adjusted {
+    background: #e8f5e9;
+}
+.wd-input {
+    width: 56px;
+    border: 1px solid #bdbdbd;
+    border-radius: 4px;
+    padding: 3px 5px;
+    text-align: center;
+    font-size: 0.88rem;
+}
+.wd-input:focus {
+    outline: none;
+    border-color: #1976d2;
+    background: #e3f2fd;
 }
 
 .btn-primary {

@@ -11,6 +11,8 @@
 <MudStack Row="true" Spacing="3" Class="mb-4" AlignItems="AlignItems.Center">
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                OnClick="OpenAddDialog">新規登録</MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.UploadFile"
+               OnClick="OpenCsvImportDialog">CSVインポート</MudButton>
     <MudCheckBox T="bool" Value="_showAll" ValueChanged="@(async v => { _showAll = v; await LoadAsync(); })" Label="完了・中止も表示" />
 </MudStack>
 
@@ -53,6 +55,13 @@
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync() => _themes = await ThemeService.GetAllAsync(!_showAll);
+
+    private async Task OpenCsvImportDialog()
+    {
+        var dialog = await DialogService.ShowAsync<ThemeCsvImportDialog>("CSVインポート");
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
 
     private async Task OpenAddDialog()
     {

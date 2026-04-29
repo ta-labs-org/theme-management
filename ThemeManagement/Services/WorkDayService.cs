@@ -8,9 +8,11 @@ public interface IWorkDayService
 {
     Task<List<MonthlyWorkDays>> GetAllAsync();
     Task<MonthlyWorkDays?> GetByYearMonthAsync(int year, int month);
+    Task<List<MonthlyWorkDays>> GetByPeriodAsync(List<(int Year, int Month)> months);
     Task SaveAsync(MonthlyWorkDays workDays);
     Task DeleteAsync(int id);
     Task<List<EngineerMonthlyAdjustment>> GetAdjustmentsAsync(int year, int month);
+    Task<List<EngineerMonthlyAdjustment>> GetAdjustmentsForPeriodAsync(List<(int Year, int Month)> months);
     Task<EngineerMonthlyAdjustment?> GetAdjustmentAsync(int engineerId, int year, int month);
     Task SaveAdjustmentAsync(EngineerMonthlyAdjustment adjustment);
     Task DeleteAdjustmentAsync(int id);
@@ -29,6 +31,17 @@ public class WorkDayService : IWorkDayService
 
     public Task<MonthlyWorkDays?> GetByYearMonthAsync(int year, int month) =>
         _db.MonthlyWorkDays.AsNoTracking().FirstOrDefaultAsync(m => m.Year == year && m.Month == month);
+
+    public async Task<List<MonthlyWorkDays>> GetByPeriodAsync(List<(int Year, int Month)> months)
+    {
+        var years = months.Select(m => m.Year).Distinct().ToList();
+        var monthNums = months.Select(m => m.Month).Distinct().ToList();
+        var all = await _db.MonthlyWorkDays.AsNoTracking()
+            .Where(w => years.Contains(w.Year) && monthNums.Contains(w.Month))
+            .ToListAsync();
+        var set = months.ToHashSet();
+        return all.Where(w => set.Contains((w.Year, w.Month))).ToList();
+    }
 
     public async Task SaveAsync(MonthlyWorkDays workDays)
     {
@@ -60,6 +73,19 @@ public class WorkDayService : IWorkDayService
             .Where(a => a.Year == year && a.Month == month)
             .OrderBy(a => a.Engineer.Name)
             .ToListAsync();
+
+    public async Task<List<EngineerMonthlyAdjustment>> GetAdjustmentsForPeriodAsync(List<(int Year, int Month)> months)
+    {
+        var years = months.Select(m => m.Year).Distinct().ToList();
+        var monthNums = months.Select(m => m.Month).Distinct().ToList();
+        var all = await _db.EngineerMonthlyAdjustments
+            .AsNoTracking()
+            .Include(a => a.Engineer)
+            .Where(a => years.Contains(a.Year) && monthNums.Contains(a.Month))
+            .ToListAsync();
+        var set = months.ToHashSet();
+        return all.Where(a => set.Contains((a.Year, a.Month))).ToList();
+    }
 
     public Task<EngineerMonthlyAdjustment?> GetAdjustmentAsync(int engineerId, int year, int month) =>
         _db.EngineerMonthlyAdjustments

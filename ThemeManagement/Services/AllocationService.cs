@@ -10,17 +10,24 @@ public interface IAllocationService
 {
     Task<List<AllocationRowDto>> GetByEngineerAsync(int engineerId, int year, int month);
     Task<List<AllocationRowDto>> GetByThemeAsync(int themeId, int year, int month);
+    Task<List<EngineerThemeAllocation>> GetAllocationsForPeriodAsync(int year, IEnumerable<int> months);
     decimal GetMaxDevelopableHours(int engineerId, int year, int month);
     decimal GetTotalAllocatedHoursByEngineer(int engineerId, int year, int month, int? excludeId = null);
     decimal GetTotalAllocatedCostByTheme(int themeId, int? excludeId = null);
     Task UpsertAllocationAsync(int engineerId, int themeId, int year, int month, decimal hours);
+    Task UpsertAllocationNoValidationAsync(int engineerId, int themeId, int year, int month, decimal hours);
     Task DeleteAllocationAsync(int id);
 }
 
 public class AllocationService : IAllocationService
 {
     private readonly AppDbContext _db;
-    public AllocationService(AppDbContext db) => _db = db;
+    private readonly ICapacitySettings _capacitySettings;
+    public AllocationService(AppDbContext db, ICapacitySettings capacitySettings)
+    {
+        _db = db;
+        _capacitySettings = capacitySettings;
+    }
 
     public Task<List<AllocationRowDto>> GetByEngineerAsync(int engineerId, int year, int month) =>
         _db.EngineerThemeAllocations
@@ -54,7 +61,7 @@ public class AllocationService : IAllocationService
             ?? _db.MonthlyWorkDays.AsNoTracking().FirstOrDefault(m => m.Year == year && m.Month == month)?.WorkDays
             ?? 0;
 
-        return workDays * 8m * 0.9m;
+        return workDays * 8m * _capacitySettings.Coefficient;
     }
 
     public decimal GetTotalAllocatedHoursByEngineer(int engineerId, int year, int month, int? excludeId = null)
@@ -137,5 +144,47 @@ public class AllocationService : IAllocationService
             _db.EngineerThemeAllocations.Remove(allocation);
             await _db.SaveChangesAsync();
         }
+    }
+
+    public Task<List<EngineerThemeAllocation>> GetAllocationsForPeriodAsync(int year, IEnumerable<int> months)
+    {
+        var monthList = months.ToList();
+        return _db.EngineerThemeAllocations
+            .AsNoTracking()
+            .Where(a => a.Year == year && monthList.Contains(a.Month))
+            .ToListAsync();
+    }
+
+    public async Task UpsertAllocationNoValidationAsync(int engineerId, int themeId, int year, int month, decimal hours)
+    {
+        var existing = await _db.EngineerThemeAllocations
+            .FirstOrDefaultAsync(a => a.EngineerId == engineerId && a.ThemeId == themeId
+                                      && a.Year == year && a.Month == month);
+        if (hours <= 0)
+        {
+            if (existing != null)
+            {
+                _db.EngineerThemeAllocations.Remove(existing);
+                await _db.SaveChangesAsync();
+            }
+            return;
+        }
+
+        if (existing == null)
+        {
+            _db.EngineerThemeAllocations.Add(new EngineerThemeAllocation
+            {
+                EngineerId = engineerId,
+                ThemeId = themeId,
+                Year = year,
+                Month = month,
+                AllocatedHours = hours
+            });
+        }
+        else
+        {
+            existing.AllocatedHours = hours;
+        }
+        await _db.SaveChangesAsync();
     }
 }

@@ -2,174 +2,237 @@
 @rendermode InteractiveServer
 @inject IWorkDayService WorkDayService
 @inject IEngineerService EngineerService
+@inject IJapaneseBusinessDayService BusinessDayService
+@inject ICapacitySettings CapacitySettings
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
 
 <PageTitle>稼働日管理</PageTitle>
 
 <MudText Typo="Typo.h5" Class="mb-4">稼働日管理</MudText>
 
 <MudPaper Class="pa-4 mb-4" Elevation="1">
-    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Wrap="Wrap.Wrap">
         <MudNumericField T="int" @bind-Value="_year" Label="年" Min="2020" Max="2100" Style="width:100px" />
-        <MudNumericField T="int" @bind-Value="_month" Label="月" Min="1" Max="12" Style="width:80px" />
+        <MudToggleGroup T="int" @bind-Value="_half" SelectionMode="SelectionMode.SingleSelection"
+                        Color="Color.Primary" CheckMark="false">
+            <MudToggleItem Value="1" Text="上期（4〜9月）" />
+            <MudToggleItem Value="2" Text="下期（10〜3月）" />
+        </MudToggleGroup>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">表示</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.AutoAwesome"
+                   OnClick="AutoFillBusinessDaysAsync">祝休日除き自動計算</MudButton>
+        <MudDivider Vertical="true" Class="mx-2" />
+        <MudNumericField T="decimal" @bind-Value="_coefficient" Label="稼働係数" Min="0.1m" Max="1.0m" Step="0.05m"
+                         Format="F2" Style="width:100px"
+                         @onblur="SaveCoefficient" Adornment="Adornment.End" AdornmentText="×" />
+        <MudText Typo="Typo.caption" Color="Color.Secondary">最大開発可能 = 稼働日数 × 8h × 係数</MudText>
     </MudStack>
 </MudPaper>
 
-<MudText Typo="Typo.h6" Class="mb-2">全体稼働日（@(_year)年@(_month)月）</MudText>
-<MudPaper Class="pa-4 mb-4" Elevation="1">
-    @if (_monthlyWorkDays == null)
-    {
-        <MudText Class="mb-2" Color="Color.Warning">この月の稼働日が未登録です</MudText>
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add"
-                   OnClick="OpenAddWorkDayDialog">稼働日を登録</MudButton>
-    }
-    else
-    {
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
-            <MudText>稼働日数: <strong>@_monthlyWorkDays.WorkDays 日</strong></MudText>
-            <MudText>最大開発可能（標準）: <strong>@(_monthlyWorkDays.WorkDays * 8m * 0.9m) h</strong></MudText>
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="OpenEditWorkDayDialog" />
-            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
-                           OnClick="DeleteWorkDayAsync" />
-        </MudStack>
-    }
-</MudPaper>
+@if (_loaded)
+{
+    <MudText Typo="Typo.h6" Class="mb-1">全体稼働日</MudText>
+    <MudText Typo="Typo.caption" Class="mb-2" Color="Color.Secondary">空欄にすると未設定（削除）になります</MudText>
+    <div class="workday-table-wrapper mb-6">
+        <table class="workday-table">
+            <thead>
+                <tr>
+                    <th class="wd-label-col">項目</th>
+                    @foreach (var (y, m) in _months)
+                    {
+                        <th>@(y)/<br />@(m)月</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="wd-label-col">稼働日数（日）</td>
+                    @foreach (var (y, m) in _months)
+                    {
+                        var wd = _workDaysMap.GetValueOrDefault((y, m));
+                        <td>
+                            <input type="number" class="wd-input"
+                                   value="@(wd?.WorkDays.ToString() ?? "")"
+                                   min="0" max="31"
+                                   placeholder="—"
+                                   @onchange="async e => await SaveWorkDayAsync(y, m, e.Value?.ToString())" />
+                        </td>
+                    }
+                </tr>
+                <tr class="wd-row-calc">
+                    <td class="wd-label-col">最大開発可能(h)</td>
+                    @foreach (var (y, m) in _months)
+                    {
+                        var wd = _workDaysMap.GetValueOrDefault((y, m));
+                        <td>@(wd != null ? $"{wd.WorkDays * 8m * _coefficient:F0}h" : "—")</td>
+                    }
+                </tr>
+            </tbody>
+        </table>
+    </div>
 
-<MudText Typo="Typo.h6" Class="mb-2">エンジニア個別調整（@(_year)年@(_month)月）</MudText>
-<MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add"
-           OnClick="OpenAddAdjustmentDialog" Class="mb-3">個別調整を追加</MudButton>
-
-<MudTable Items="_adjustments" Dense="true" Hover="true" Elevation="2">
-    <HeaderContent>
-        <MudTh>エンジニア</MudTh>
-        <MudTh Style="text-align:right">稼働日数</MudTh>
-        <MudTh Style="text-align:right">最大開発可能(h)</MudTh>
-        <MudTh>備考</MudTh>
-        <MudTh>操作</MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd>@context.Engineer.Name</MudTd>
-        <MudTd Style="text-align:right">@context.WorkDays 日</MudTd>
-        <MudTd Style="text-align:right">@(context.WorkDays * 8m * 0.9m) h</MudTd>
-        <MudTd>@context.Note</MudTd>
-        <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditAdjustmentDialog(context)" />
-            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
-                           OnClick="() => DeleteAdjustmentAsync(context)" />
-        </MudTd>
-    </RowTemplate>
-    <NoRecordsContent><MudText>個別調整なし</MudText></NoRecordsContent>
-</MudTable>
+    <MudText Typo="Typo.h6" Class="mb-1">エンジニア個別調整</MudText>
+    <MudText Typo="Typo.caption" Class="mb-2" Color="Color.Secondary">未入力＝全体稼働日を使用。空欄に戻すと調整削除。プレースホルダーは全体稼働日数。</MudText>
+    <div class="workday-table-wrapper mb-4">
+        <table class="workday-table">
+            <thead>
+                <tr>
+                    <th class="wd-label-col">エンジニア</th>
+                    @foreach (var (y, m) in _months)
+                    {
+                        <th>@(y)/<br />@(m)月</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var eng in _engineers)
+                {
+                    <tr>
+                        <td class="wd-label-col wd-eng-name">@eng.Name</td>
+                        @foreach (var (y, m) in _months)
+                        {
+                            var adj = _adjustmentsMap.GetValueOrDefault((eng.Id, y, m));
+                            var baseWd = _workDaysMap.GetValueOrDefault((y, m));
+                            <td class="@(adj != null ? "wd-cell-adjusted" : "")">
+                                <input type="number" class="wd-input"
+                                       value="@(adj?.WorkDays.ToString() ?? baseWd?.WorkDays.ToString() ?? "")"
+                                       min="0" max="31"
+                                       @onchange="async e => await SaveAdjustmentAsync(eng.Id, y, m, e.Value?.ToString(), baseWd?.WorkDays)" />
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
 
 @code {
-    private int _year = DateTime.Now.Year;
-    private int _month = DateTime.Now.Month;
-    private MonthlyWorkDays? _monthlyWorkDays;
-    private List<EngineerMonthlyAdjustment> _adjustments = [];
+    private int _year = DateTime.Now.Month >= 4 ? DateTime.Now.Year : DateTime.Now.Year - 1;
+    private int _half = DateTime.Now.Month is >= 4 and <= 9 ? 1 : 2;
+    private bool _loaded;
+    private decimal _coefficient;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private List<(int Year, int Month)> _months = [];
+    private Dictionary<(int Year, int Month), MonthlyWorkDays> _workDaysMap = new();
+    private Dictionary<(int EngineerId, int Year, int Month), EngineerMonthlyAdjustment> _adjustmentsMap = new();
+    private List<Engineer> _engineers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _coefficient = CapacitySettings.Coefficient;
+        _engineers = (await EngineerService.GetAllAsync()).Where(e => e.IsActive).ToList();
+        await LoadAsync();
+    }
+
+    private List<(int Year, int Month)> BuildMonths() =>
+        _half == 1
+            ? Enumerable.Range(4, 6).Select(m => (_year, m)).ToList()
+            : new List<(int, int)>
+            {
+                (_year, 10), (_year, 11), (_year, 12),
+                (_year + 1, 1), (_year + 1, 2), (_year + 1, 3)
+            };
 
     private async Task LoadAsync()
     {
-        _monthlyWorkDays = await WorkDayService.GetByYearMonthAsync(_year, _month);
-        _adjustments = await WorkDayService.GetAdjustmentsAsync(_year, _month);
+        _months = BuildMonths();
+
+        var workDaysList = await WorkDayService.GetByPeriodAsync(_months);
+        _workDaysMap = workDaysList.ToDictionary(w => (w.Year, w.Month));
+
+        var adjList = await WorkDayService.GetAdjustmentsForPeriodAsync(_months);
+        _adjustmentsMap = adjList.ToDictionary(a => (a.EngineerId, a.Year, a.Month));
+
+        _loaded = true;
     }
 
-    private async Task OpenAddWorkDayDialog()
+    private void SaveCoefficient()
     {
-        var item = new MonthlyWorkDays { Year = _year, Month = _month };
-        var parameters = new DialogParameters<WorkDayEditDialog> { { x => x.WorkDays, item } };
-        var dialog = await DialogService.ShowAsync<WorkDayEditDialog>("稼働日登録", parameters);
-        var result = await dialog.Result;
-        if (result is { Canceled: false }) await LoadAsync();
+        _coefficient = Math.Clamp(_coefficient, 0.1m, 1.0m);
+        CapacitySettings.Coefficient = _coefficient;
+        Snackbar.Add($"稼働係数を {_coefficient:F2} に変更しました", Severity.Success);
+        StateHasChanged();
     }
 
-    private async Task OpenEditWorkDayDialog()
+    private async Task AutoFillBusinessDaysAsync()
     {
-        if (_monthlyWorkDays == null) return;
-        var copy = new MonthlyWorkDays { Id = _monthlyWorkDays.Id, Year = _monthlyWorkDays.Year, Month = _monthlyWorkDays.Month, WorkDays = _monthlyWorkDays.WorkDays };
-        var parameters = new DialogParameters<WorkDayEditDialog> { { x => x.WorkDays, copy } };
-        var dialog = await DialogService.ShowAsync<WorkDayEditDialog>("稼働日編集", parameters);
-        var result = await dialog.Result;
-        if (result is { Canceled: false }) await LoadAsync();
-    }
-
-    private async Task DeleteWorkDayAsync()
-    {
-        if (_monthlyWorkDays == null) return;
-        var confirmed = await ConfirmAsync("削除確認", $"{_year}年{_month}月の稼働日設定を削除しますか？", "削除");
-        if (confirmed)
+        int saved = 0;
+        foreach (var (y, m) in _months)
         {
-            await WorkDayService.DeleteAsync(_monthlyWorkDays.Id);
-            Snackbar.Add("削除しました", Severity.Success);
-            await LoadAsync();
+            var days = BusinessDayService.GetBusinessDays(y, m);
+            var wd = _workDaysMap.GetValueOrDefault((y, m)) ?? new MonthlyWorkDays { Year = y, Month = m };
+            if (wd.WorkDays == days) continue; // 既に同じ値なら保存不要
+            wd.WorkDays = days;
+            await WorkDayService.SaveAsync(wd);
+            var saved_ = await WorkDayService.GetByYearMonthAsync(y, m);
+            if (saved_ != null) _workDaysMap[(y, m)] = saved_;
+            saved++;
         }
+        Snackbar.Add(saved > 0 ? $"{saved}ヶ月分の稼働日を自動計算でセットしました" : "変更なし（既に同じ値です）", Severity.Success);
+        StateHasChanged();
     }
 
-    private async Task OpenAddAdjustmentDialog()
+    private async Task SaveWorkDayAsync(int year, int month, string? valueStr)
     {
-        var engineers = await EngineerService.GetAllAsync();
-        var usedIds = _adjustments.Select(a => a.EngineerId).ToHashSet();
-        var available = engineers.Where(e => !usedIds.Contains(e.Id)).ToList();
-
-        if (!available.Any())
+        if (string.IsNullOrWhiteSpace(valueStr) || !int.TryParse(valueStr, out var days))
         {
-            Snackbar.Add("調整できるエンジニアがいません（全員調整済み）", Severity.Info);
+            var existing = _workDaysMap.GetValueOrDefault((year, month));
+            if (existing != null)
+            {
+                await WorkDayService.DeleteAsync(existing.Id);
+                _workDaysMap.Remove((year, month));
+                Snackbar.Add($"{year}/{month} 稼働日を削除しました", Severity.Info);
+                StateHasChanged();
+            }
             return;
         }
 
-        var adj = new EngineerMonthlyAdjustment { Year = _year, Month = _month };
-        var parameters = new DialogParameters<AdjustmentDialog>
-        {
-            { x => x.Adjustment, adj },
-            { x => x.AvailableEngineers, available }
-        };
-        var dialog = await DialogService.ShowAsync<AdjustmentDialog>("個別調整追加", parameters);
-        var result = await dialog.Result;
-        if (result is { Canceled: false }) await LoadAsync();
+        var wd = _workDaysMap.GetValueOrDefault((year, month)) ?? new MonthlyWorkDays { Year = year, Month = month };
+        wd.WorkDays = days;
+        await WorkDayService.SaveAsync(wd);
+        var saved = await WorkDayService.GetByYearMonthAsync(year, month);
+        if (saved != null) _workDaysMap[(year, month)] = saved;
+        Snackbar.Add($"{year}/{month} 稼働日を保存しました", Severity.Success);
+        StateHasChanged();
     }
 
-    private async Task OpenEditAdjustmentDialog(EngineerMonthlyAdjustment adj)
+    private async Task SaveAdjustmentAsync(int engId, int year, int month, string? valueStr, int? baseWorkDays = null)
     {
-        var copy = new EngineerMonthlyAdjustment
+        if (string.IsNullOrWhiteSpace(valueStr) || !int.TryParse(valueStr, out var days))
         {
-            Id = adj.Id, EngineerId = adj.EngineerId, Year = adj.Year,
-            Month = adj.Month, WorkDays = adj.WorkDays, Note = adj.Note
-        };
-        var parameters = new DialogParameters<AdjustmentDialog>
-        {
-            { x => x.Adjustment, copy },
-            { x => x.AvailableEngineers, [] },
-            { x => x.EngineerName, adj.Engineer.Name }
-        };
-        var dialog = await DialogService.ShowAsync<AdjustmentDialog>("個別調整編集", parameters);
-        var result = await dialog.Result;
-        if (result is { Canceled: false }) await LoadAsync();
-    }
-
-    private async Task DeleteAdjustmentAsync(EngineerMonthlyAdjustment adj)
-    {
-        var confirmed = await ConfirmAsync("削除確認", $"{adj.Engineer.Name} の {_year}/{_month} 個別調整を削除しますか？", "削除");
-        if (confirmed)
-        {
-            await WorkDayService.DeleteAdjustmentAsync(adj.Id);
-            Snackbar.Add("削除しました", Severity.Success);
-            await LoadAsync();
+            var existing = _adjustmentsMap.GetValueOrDefault((engId, year, month));
+            if (existing != null)
+            {
+                await WorkDayService.DeleteAdjustmentAsync(existing.Id);
+                _adjustmentsMap.Remove((engId, year, month));
+                Snackbar.Add("個別調整を削除しました", Severity.Info);
+                StateHasChanged();
+            }
+            return;
         }
-    }
 
-    private async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK")
-    {
-        var parameters = new DialogParameters<ConfirmDialog>
+        // ベース稼働日数と同じ値なら調整不要として削除
+        if (days == baseWorkDays)
         {
-            { x => x.Message, message },
-            { x => x.ConfirmText, confirmText },
-            { x => x.ConfirmColor, Color.Error }
-        };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>(title, parameters);
-        var result = await dialog.Result;
-        return result is { Canceled: false };
+            var existing = _adjustmentsMap.GetValueOrDefault((engId, year, month));
+            if (existing != null)
+            {
+                await WorkDayService.DeleteAdjustmentAsync(existing.Id);
+                _adjustmentsMap.Remove((engId, year, month));
+                Snackbar.Add("ベース稼働日数と同じため調整を削除しました", Severity.Info);
+                StateHasChanged();
+            }
+            return;
+        }
+
+        var adj = _adjustmentsMap.GetValueOrDefault((engId, year, month))
+            ?? new EngineerMonthlyAdjustment { EngineerId = engId, Year = year, Month = month };
+        adj.WorkDays = days;
+        await WorkDayService.SaveAdjustmentAsync(adj);
+        var saved = await WorkDayService.GetAdjustmentAsync(engId, year, month);
+        if (saved != null) _adjustmentsMap[(engId, year, month)] = saved;
+        Snackbar.Add("個別調整を保存しました", Severity.Success);
+        StateHasChanged();
     }
 }

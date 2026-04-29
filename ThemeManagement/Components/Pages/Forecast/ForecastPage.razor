@@ -1,0 +1,364 @@
+@page "/forecast"
+@using ThemeManagement.Domain.Entities
+@using ThemeManagement.Services
+@inject IAllocationService AllocationService
+@inject IEngineerService EngineerService
+@inject IThemeService ThemeService
+@inject ISnackbar Snackbar
+@inject IWorkDayService WorkDayService
+@inject ICapacitySettings CapacitySettings
+
+<PageTitle>半期見込計算</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-3">半期見込計算</MudText>
+
+<MudPaper Class="pa-3 mb-4" Elevation="1">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+        <MudNumericField T="int" @bind-Value="_fiscalYear" Label="年度" Min="2020" Max="2099"
+                         Style="width:100px" Immediate="true" />
+        <MudSelect T="bool" @bind-Value="_isFirstHalf" Label="期" Style="width:110px">
+            <MudSelectItem T="bool" Value="true">上期 (4〜9月)</MudSelectItem>
+            <MudSelectItem T="bool" Value="false">下期 (10〜3月)</MudSelectItem>
+        </MudSelect>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadData"
+                   StartIcon="@Icons.Material.Filled.Refresh">読み込み</MudButton>
+        @if (_loading)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+        }
+    </MudStack>
+</MudPaper>
+
+@if (_loaded)
+{
+    <div class="forecast-container">
+        <!-- ===== エンジニアビュー ===== -->
+        <MudPaper Class="pa-3 forecast-panel" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Engineering" Class="mr-1" />
+                エンジニアビュー
+            </MudText>
+            <div style="overflow-x:auto;">
+                <table class="forecast-table">
+                    <thead>
+                        <tr>
+                            <th class="col-name">エンジニア</th>
+                            <th class="col-name">テーマ</th>
+                            @foreach (var (y, m) in _periodMonths)
+                            {
+                                <th class="col-month">@(m)月</th>
+                            }
+                            <th class="col-total">合計</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var eng in _engineers)
+                        {
+                            var engThemes = _themes.ToList();
+                            @for (int ti = 0; ti < engThemes.Count; ti++)
+                            {
+                                var theme = engThemes[ti];
+                                var isFirstTheme = ti == 0;
+                                var isLastTheme = ti == engThemes.Count - 1;
+                                var engId = eng.Id;
+                                var themeId = theme.Id;
+                                <tr class="@(isLastTheme ? "row-eng-last" : "")">
+                                    @if (isFirstTheme)
+                                    {
+                                        <td rowspan="@engThemes.Count" class="cell-group-name">@eng.Name</td>
+                                    }
+                                    <td class="cell-sub-name">@theme.Name</td>
+                                    @foreach (var (y, m) in _periodMonths)
+                                    {
+                                        var cy = y; var cm = m;
+                                        var pastDeadline = IsMonthPastDeadline(theme, cy, cm);
+                                        <td class="cell-input @(pastDeadline ? "cell-past-deadline" : "")">
+                                            <input type="number" class="alloc-input" min="0" step="5"
+                                                   value="@((int)GetAlloc(engId, themeId, cy, cm))"
+                                                   @onchange="@(async e => await OnAllocChanged(engId, themeId, cy, cm, e.Value?.ToString()))" />
+                                        </td>
+                                    }
+                                    <td class="cell-total">@FormatHours(GetRowTotal(engId, themeId))</td>
+                                </tr>
+                            }
+                            <!-- エンジニア小計行 -->
+                            <tr class="row-subtotal">
+                                <td colspan="2">小計</td>
+                                @foreach (var (y, m) in _periodMonths)
+                                {
+                                    var isOver = IsOverCapacity(eng.Id, y, m);
+                                    <td class="@(isOver ? "cell-over-capacity" : "")">
+                                        @FormatHours(GetEngineerMonthTotal(eng.Id, y, m))
+                                        @if (isOver) { <span title="稼働上限超過">⚠</span> }
+                                    </td>
+                                }
+                                <td>@FormatHours(GetEngineerTotal(eng.Id))</td>
+                            </tr>
+                            <!-- 稼働上限行 -->
+                            <tr class="row-capacity">
+                                <td colspan="2">稼働上限</td>
+                                @foreach (var (y, m) in _periodMonths)
+                                {
+                                    var cap = GetCapacity(eng.Id, y, m);
+                                    <td>@(cap > 0 ? $"{cap:F0}h" : "—")</td>
+                                }
+                                <td></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </MudPaper>
+
+        <!-- ===== テーマビュー ===== -->
+        <MudPaper Class="pa-3 forecast-panel" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Topic" Class="mr-1" />
+                テーマビュー
+            </MudText>
+            <div style="overflow-x:auto;">
+                <table class="forecast-table">
+                    <thead>
+                        <tr>
+                            <th class="col-name">テーマ</th>
+                            <th class="col-name">エンジニア</th>
+                            @foreach (var (y, m) in _periodMonths)
+                            {
+                                <th class="col-month">@(m)月</th>
+                            }
+                            <th class="col-total">合計</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var theme in _themes)
+                        {
+                            var themeEngineers = _engineers.ToList();
+                            @for (int ei = 0; ei < themeEngineers.Count; ei++)
+                            {
+                                var eng = themeEngineers[ei];
+                                var isFirstEng = ei == 0;
+                                var isLastEng = ei == themeEngineers.Count - 1;
+                                var engId = eng.Id;
+                                var themeId = theme.Id;
+                                <tr class="@(isLastEng ? "row-eng-last" : "")">
+                                    @if (isFirstEng)
+                                    {
+                                        <td rowspan="@themeEngineers.Count" class="cell-group-name">
+                                            <div>@theme.Name</div>
+                                            <div class="theme-meta">
+                                                <span>¥@(theme.OrderAmount.ToString("N0"))</span><br />
+                                                <span>〆@(theme.EstimatedCompletionDate.ToString("yyyy/M"))</span>
+                                            </div>
+                                        </td>
+                                    }
+                                    <td class="cell-sub-name">@eng.Name</td>
+                                    @foreach (var (y, m) in _periodMonths)
+                                    {
+                                        var cy = y; var cm = m;
+                                        var pastDeadline = IsMonthPastDeadline(theme, cy, cm);
+                                        <td class="cell-input @(pastDeadline ? "cell-past-deadline" : "")">
+                                            <input type="number" class="alloc-input" min="0" step="5"
+                                                   value="@((int)GetAlloc(engId, themeId, cy, cm))"
+                                                   @onchange="@(async e => await OnAllocChanged(engId, themeId, cy, cm, e.Value?.ToString()))" />
+                                        </td>
+                                    }
+                                    <td class="cell-total">@FormatHours(GetRowTotal(engId, themeId))</td>
+                                </tr>
+                            }
+                            <!-- テーマ小計行 -->
+                            <tr class="row-subtotal">
+                                <td colspan="2">小計</td>
+                                @foreach (var (y, m) in _periodMonths)
+                                {
+                                    <td>@FormatHours(GetThemeMonthTotal(theme.Id, y, m))</td>
+                                }
+                                <td>@FormatHours(GetThemeTotal(theme.Id))</td>
+                            </tr>
+                            <!-- テーマコスト試算行 -->
+                            <tr class="@(theme.OrderAmount > 0 && GetThemePeriodCost(theme.Id) > theme.OrderAmount ? "row-over-budget" : "row-theme-cost")">
+                                <td colspan="@(2 + _periodMonths.Count + 1)">
+                                    @if (theme.OrderAmount > 0 && GetThemePeriodCost(theme.Id) > theme.OrderAmount)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="mr-1" />
+                                        <span>コスト超過: 試算 ¥@(GetThemePeriodCost(theme.Id).ToString("N0")) ／ 受注 ¥@(theme.OrderAmount.ToString("N0"))</span>
+                                    }
+                                    else
+                                    {
+                                        <span>コスト試算: ¥@(GetThemePeriodCost(theme.Id).ToString("N0")) ／ 受注 ¥@(theme.OrderAmount.ToString("N0"))</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </MudPaper>
+    </div>
+}
+
+@code {
+    private int _fiscalYear = GetDefaultFiscalYear();
+    private bool _isFirstHalf = GetDefaultIsFirstHalf();
+    private bool _loaded = false;
+    private bool _loading = false;
+
+    private List<Engineer> _engineers = new();
+    private List<Theme> _themes = new();
+    private List<(int Year, int Month)> _periodMonths = new();
+
+    // Key: (EngineerId, ThemeId, Year, Month)
+    private Dictionary<(int, int, int, int), decimal> _allocMap = new();
+
+    // Key: (Year, Month) -> 基本稼働日数
+    private Dictionary<(int, int), int> _baseWorkDays = new();
+    // Key: (EngineerId, Year, Month) -> 個別調整稼働日数
+    private Dictionary<(int, int, int), int> _adjustmentWorkDays = new();
+
+    private static int GetDefaultFiscalYear()
+    {
+        var now = DateTime.Today;
+        return now.Month >= 4 ? now.Year : now.Year - 1;
+    }
+
+    private static bool GetDefaultIsFirstHalf()
+    {
+        var m = DateTime.Today.Month;
+        return m >= 4 && m <= 9;
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            ComputePeriodMonths();
+            _engineers = await EngineerService.GetAllAsync();
+            _themes = await ThemeService.GetAllAsync(activeOnly: true);
+            _allocMap.Clear();
+
+            // 下期は年度をまたぐので年ごとにグループ化して取得
+            foreach (var grp in _periodMonths.GroupBy(p => p.Year))
+            {
+                var allocs = await AllocationService.GetAllocationsForPeriodAsync(
+                    grp.Key, grp.Select(p => p.Month));
+                foreach (var a in allocs)
+                    _allocMap[(a.EngineerId, a.ThemeId, a.Year, a.Month)] = a.AllocatedHours;
+            }
+            _loaded = true;
+
+            // 稼働日数データ読み込み（エンジニア上限チェック用）
+            _baseWorkDays.Clear();
+            _adjustmentWorkDays.Clear();
+            foreach (var (y, m) in _periodMonths)
+            {
+                var wd = await WorkDayService.GetByYearMonthAsync(y, m);
+                if (wd != null) _baseWorkDays[(y, m)] = wd.WorkDays;
+
+                var adjs = await WorkDayService.GetAdjustmentsAsync(y, m);
+                foreach (var adj in adjs)
+                    _adjustmentWorkDays[(adj.EngineerId, y, m)] = adj.WorkDays;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ComputePeriodMonths()
+    {
+        _periodMonths = _isFirstHalf
+            ? Enumerable.Range(4, 6).Select(m => (_fiscalYear, m)).ToList()
+            : new List<(int, int)>
+              {
+                  (_fiscalYear, 10), (_fiscalYear, 11), (_fiscalYear, 12),
+                  (_fiscalYear + 1, 1), (_fiscalYear + 1, 2), (_fiscalYear + 1, 3)
+              };
+    }
+
+    private decimal GetAlloc(int engId, int themeId, int year, int month)
+        => _allocMap.TryGetValue((engId, themeId, year, month), out var v) ? v : 0;
+
+    private async Task OnAllocChanged(int engId, int themeId, int year, int month, string? valueStr)
+    {
+        if (!decimal.TryParse(valueStr, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var value) || value < 0)
+            value = 0;
+
+        _allocMap[(engId, themeId, year, month)] = value;
+
+        try
+        {
+            await AllocationService.UpsertAllocationNoValidationAsync(engId, themeId, year, month, value);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"保存失敗: {ex.Message}", Severity.Error);
+        }
+        // 両テーブルに即反映（同じ _allocMap を参照しているため StateHasChanged のみで OK）
+        StateHasChanged();
+    }
+
+    private decimal GetRowTotal(int engId, int themeId)
+        => _periodMonths.Sum(p => GetAlloc(engId, themeId, p.Year, p.Month));
+
+    private decimal GetEngineerMonthTotal(int engId, int year, int month)
+        => _themes.Sum(t => GetAlloc(engId, t.Id, year, month));
+
+    private decimal GetEngineerTotal(int engId)
+        => _periodMonths.Sum(p => GetEngineerMonthTotal(engId, p.Year, p.Month));
+
+    private decimal GetThemeMonthTotal(int themeId, int year, int month)
+        => _engineers.Sum(e => GetAlloc(e.Id, themeId, year, month));
+
+    private decimal GetThemeTotal(int themeId)
+        => _periodMonths.Sum(p => GetThemeMonthTotal(themeId, p.Year, p.Month));
+
+    private static string FormatHours(decimal h) => h == 0 ? "-" : $"{h:F0}h";
+
+    // ===== エンジニア稼働上限 =====
+
+    /// <summary>エンジニアの月稼働可能時間 (稼働日数×8h×0.9)</summary>
+    private decimal GetCapacity(int engId, int year, int month)
+    {
+        int days = _adjustmentWorkDays.TryGetValue((engId, year, month), out var adj)
+            ? adj
+            : _baseWorkDays.TryGetValue((year, month), out var baseWd) ? baseWd : 0;
+        return days * 8m * 0.9m;
+    }
+
+    /// <summary>エンジニアの月合計が稼働上限を超えているか</summary>
+    private bool IsOverCapacity(int engId, int year, int month)
+    {
+        var cap = GetCapacity(engId, year, month);
+        return cap > 0 && GetEngineerMonthTotal(engId, year, month) > cap;
+    }
+
+    // ===== テーマ完了予定月・コスト =====
+
+    /// <summary>指定月がテーマの完了予定月より後か</summary>
+    private static bool IsMonthPastDeadline(Theme theme, int year, int month)
+    {
+        var deadline = theme.EstimatedCompletionDate;
+        return new DateOnly(year, month, 1) > new DateOnly(deadline.Year, deadline.Month, 1);
+    }
+
+    /// <summary>期間内のテーマ試算コスト（エンジニア売上単価ベース）</summary>
+    private decimal GetThemePeriodCost(int themeId)
+    {
+        decimal cost = 0;
+        foreach (var eng in _engineers)
+        {
+            foreach (var (y, m) in _periodMonths)
+            {
+                var hours = GetAlloc(eng.Id, themeId, y, m);
+                if (hours <= 0) continue;
+                var unitPrice = eng.Grade?.UnitSalePrice ?? 0; // 時間単価（円/時間）
+                cost += hours * unitPrice;
+            }
+        }
+        return cost;
+    }
+}

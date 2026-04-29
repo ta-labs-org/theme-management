@@ -1,0 +1,282 @@
+@using System.Text
+@using System.Globalization
+@using ThemeManagement.Domain.Entities
+@using ThemeManagement.Services
+@inject IThemeService ThemeService
+@inject ISnackbar Snackbar
+
+<MudDialog Style="min-width:860px">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.UploadFile" Class="mr-2" />
+            テーマCSVインポート
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudAlert Severity="Severity.Info" Dense="true">
+                <strong>CSVフォーマット（1行目はヘッダー行として読み飛ばします）:</strong><br />
+                テーマNo, テーマ名, 受注区分, 受注日(yyyy/MM/dd), 完了予定日(yyyy/MM/dd), 実完了日(省略可), 受注金額(省略可), 状態(Active/Completed/Cancelled 省略時Active)<br />
+                ※ テーマNoが既存のものと一致した場合は上書き更新します
+            </MudAlert>
+
+            <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".csv" MaximumFileCount="1">
+                <ButtonTemplate>
+                    <MudButton HtmlTag="label" for="@context" Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary">
+                        CSVファイルを選択
+                    </MudButton>
+                </ButtonTemplate>
+            </MudFileUpload>
+
+            @if (_fileName != null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    <MudIcon Icon="@Icons.Material.Filled.InsertDriveFile" Size="Size.Small" Class="mr-1" />
+                    @_fileName
+                </MudText>
+            }
+
+            @if (_parsed)
+            {
+                <MudDivider />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small">有効: @_validRows.Count 件</MudChip>
+                    @if (_errorRows.Count > 0)
+                    {
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small">エラー: @_errorRows.Count 件</MudChip>
+                    }
+                </MudStack>
+
+                @if (_errorRows.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        @foreach (var row in _errorRows)
+                        {
+                            <div>行 @row.RowNo: @row.Error</div>
+                        }
+                    </MudAlert>
+                }
+
+                @if (_validRows.Count > 0)
+                {
+                    <div style="max-height:320px;overflow-y:auto">
+                        <MudTable Items="_validRows" Dense="true" Elevation="0" Striped="true">
+                            <HeaderContent>
+                                <MudTh>テーマNo</MudTh>
+                                <MudTh>テーマ名</MudTh>
+                                <MudTh>受注区分</MudTh>
+                                <MudTh>受注日</MudTh>
+                                <MudTh>完了予定日</MudTh>
+                                <MudTh Style="text-align:right">受注金額</MudTh>
+                                <MudTh>状態</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>@context.ThemeNo</MudTd>
+                                <MudTd>@context.Name</MudTd>
+                                <MudTd>@context.OrderType</MudTd>
+                                <MudTd>@context.OrderDate.ToString("yyyy/MM/dd")</MudTd>
+                                <MudTd>@context.EstimatedCompletionDate.ToString("yyyy/MM/dd")</MudTd>
+                                <MudTd Style="text-align:right">@context.OrderAmount.ToString("N0")</MudTd>
+                                <MudTd>@context.Status</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </div>
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="@(!_validRows.Any() || _importing)"
+                   OnClick="ExecuteImportAsync">
+            @if (_importing)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            インポート実行 (@_validRows.Count 件)
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private string? _fileName;
+    private bool _parsed;
+    private bool _importing;
+    private List<Theme> _validRows = [];
+    private List<ErrorRow> _errorRows = [];
+
+    private record ErrorRow(int RowNo, string Error);
+
+    private async Task OnFileSelected(IBrowserFile file)
+    {
+        _parsed = false;
+        _validRows = [];
+        _errorRows = [];
+        _fileName = file.Name;
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024); // 2MB上限
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+
+            int lineNo = 0;
+            while (!reader.EndOfStream)
+            {
+                var line = await reader.ReadLineAsync();
+                lineNo++;
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (lineNo == 1) continue; // ヘッダー行スキップ
+
+                var result = ParseLine(lineNo, line);
+                if (result.Theme != null)
+                    _validRows.Add(result.Theme);
+                else
+                    _errorRows.Add(new ErrorRow(lineNo, result.Error!));
+
+                if (lineNo > 1001)
+                {
+                    _errorRows.Add(new ErrorRow(lineNo, "1000行を超えたため読み込みを中断しました"));
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorRows.Add(new ErrorRow(0, $"ファイル読み込みエラー: {ex.Message}"));
+        }
+
+        _parsed = true;
+        StateHasChanged();
+    }
+
+    private (Theme? Theme, string? Error) ParseLine(int lineNo, string line)
+    {
+        var cols = ParseCsvLine(line);
+
+        if (cols.Count < 5)
+            return (null, $"列数が不足しています（{cols.Count}列、最低5列必要）");
+
+        var themeNo = cols[0].Trim();
+        if (string.IsNullOrEmpty(themeNo))
+            return (null, "テーマNoが空です");
+
+        var name = cols[1].Trim();
+        if (string.IsNullOrEmpty(name))
+            return (null, "テーマ名が空です");
+
+        var orderType = cols.Count > 2 && !string.IsNullOrEmpty(cols[2].Trim()) ? cols[2].Trim() : "見積";
+
+        if (!TryParseDate(cols[3].Trim(), out var orderDate))
+            return (null, $"受注日の形式が不正です（{cols[3].Trim()}）");
+
+        if (!TryParseDate(cols[4].Trim(), out var completionDate))
+            return (null, $"完了予定日の形式が不正です（{cols[4].Trim()}）");
+
+        DateOnly? actualCompletion = null;
+        if (cols.Count > 5 && !string.IsNullOrWhiteSpace(cols[5]))
+        {
+            if (!TryParseDate(cols[5].Trim(), out var ac))
+                return (null, $"実完了日の形式が不正です（{cols[5].Trim()}）");
+            actualCompletion = ac;
+        }
+
+        decimal orderAmount = 0;
+        if (cols.Count > 6 && !string.IsNullOrWhiteSpace(cols[6]))
+        {
+            var amtStr = cols[6].Trim().Replace(",", "");
+            if (!decimal.TryParse(amtStr, out orderAmount))
+                return (null, $"受注金額の形式が不正です（{cols[6].Trim()}）");
+        }
+
+        var status = "Active";
+        if (cols.Count > 7 && !string.IsNullOrWhiteSpace(cols[7]))
+        {
+            var raw = cols[7].Trim();
+            status = raw switch
+            {
+                "Active" or "進行中" => "Active",
+                "Completed" or "完了" => "Completed",
+                "Cancelled" or "中止" => "Cancelled",
+                _ => raw
+            };
+        }
+
+        return (new Theme
+        {
+            ThemeNo = themeNo,
+            Name = name,
+            OrderType = orderType,
+            OrderDate = orderDate,
+            EstimatedCompletionDate = completionDate,
+            ActualCompletionDate = actualCompletion,
+            OrderAmount = orderAmount,
+            Status = status
+        }, null);
+    }
+
+    private static bool TryParseDate(string s, out DateOnly result)
+    {
+        string[] formats = ["yyyy/MM/dd", "yyyy-MM-dd", "yyyy/M/d", "yyyy-M-d"];
+        foreach (var fmt in formats)
+        {
+            if (DateOnly.TryParseExact(s, fmt, CultureInfo.InvariantCulture, DateTimeStyles.None, out result))
+                return true;
+        }
+        result = default;
+        return false;
+    }
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var sb = new StringBuilder();
+        bool inQuotes = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (inQuotes)
+            {
+                if (c == '"' && i + 1 < line.Length && line[i + 1] == '"')
+                { sb.Append('"'); i++; }
+                else if (c == '"')
+                { inQuotes = false; }
+                else
+                { sb.Append(c); }
+            }
+            else
+            {
+                if (c == '"') { inQuotes = true; }
+                else if (c == ',') { fields.Add(sb.ToString()); sb.Clear(); }
+                else { sb.Append(c); }
+            }
+        }
+        fields.Add(sb.ToString());
+        return fields;
+    }
+
+    private async Task ExecuteImportAsync()
+    {
+        _importing = true;
+        try
+        {
+            var (added, updated) = await ThemeService.BulkImportAsync(_validRows);
+            Snackbar.Add($"インポート完了: {added}件追加、{updated}件更新", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"インポートエラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

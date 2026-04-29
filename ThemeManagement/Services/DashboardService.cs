@@ -13,8 +13,13 @@ public interface IDashboardService
 public class DashboardService : IDashboardService
 {
     private readonly AppDbContext _db;
+    private readonly ICapacitySettings _capacitySettings;
 
-    public DashboardService(AppDbContext db) => _db = db;
+    public DashboardService(AppDbContext db, ICapacitySettings capacitySettings)
+    {
+        _db = db;
+        _capacitySettings = capacitySettings;
+    }
 
     public async Task<List<EngineerWorkSummaryDto>> GetEngineerSummaryAsync(int year, int month)
     {
@@ -41,7 +46,7 @@ public class DashboardService : IDashboardService
         {
             var adjustment = adjustments.FirstOrDefault(a => a.EngineerId == e.Id);
             int workDays = adjustment?.WorkDays ?? monthlyWorkDays?.WorkDays ?? 0;
-            var max = workDays * 8m * 0.9m;
+            var max = workDays * 8m * _capacitySettings.Coefficient;
             var total = allocations.Where(a => a.EngineerId == e.Id).Sum(a => a.AllocatedHours);
             var remaining = max - total;
             var rate = max > 0 ? total / max * 100 : 0m;
