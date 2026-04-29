@@ -1,0 +1,23 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+*.suo
+*.userosscache
+*.sln.docstates
+
+## DB ファイル（データは除外）
+*.db
+*.db-shm
+*.db-wal
+
+## Logs
+*.log
+
+## User secrets
+appsettings.Development.json
+
+## OS
+.DS_Store
+Thumbs.db

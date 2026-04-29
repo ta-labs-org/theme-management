@@ -1,0 +1,154 @@
+@page "/engineers/{EngineerId:int}/allocation"
+@rendermode InteractiveServer
+@inject IEngineerService EngineerService
+@inject IAllocationService AllocationService
+@inject IThemeService ThemeService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Nav
+
+<PageTitle>エンジニア稼働管理</PageTitle>
+
+@if (_engineer == null)
+{
+    <MudText>読み込み中...</MudText>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" />
+        <MudText Typo="Typo.h5">@_engineer.Name（@_engineer.Grade.Name）　稼働管理</MudText>
+    </MudStack>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+            <MudNumericField T="int" @bind-Value="_year" Label="年" Min="2020" Max="2100" Style="width:100px" />
+            <MudNumericField T="int" @bind-Value="_month" Label="月" Min="1" Max="12" Style="width:80px" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAllocations">更新</MudButton>
+        </MudStack>
+        <MudDivider Class="my-3" />
+        <MudStack Row="true" Spacing="4">
+            <MudText>最大開発可能: <strong>@_maxHours.ToString("F1") h</strong></MudText>
+            <MudText>割り当て合計: <strong>@_totalHours.ToString("F1") h</strong></MudText>
+            <MudText Color="@(_remainingHours < 0 ? Color.Error : Color.Success)">
+                残余: <strong>@_remainingHours.ToString("F1") h</strong>
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenAddDialog" Class="mb-3">テーマ追加</MudButton>
+
+    <MudTable Items="_allocations" Dense="true" Hover="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>テーマ名</MudTh>
+            <MudTh Style="text-align:right">割り当て(h)</MudTh>
+            <MudTh Style="text-align:right">売価小計(円)</MudTh>
+            <MudTh>操作</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.ThemeName</MudTd>
+            <MudTd Style="text-align:right">@context.AllocatedHours.ToString("F1")</MudTd>
+            <MudTd Style="text-align:right">@((context.AllocatedHours * context.UnitSalePrice).ToString("N0"))</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="() => DeleteAsync(context)" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText>割り当てがありません</MudText></NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int EngineerId { get; set; }
+
+    private Engineer? _engineer;
+    private int _year = DateTime.Now.Year;
+    private int _month = DateTime.Now.Month;
+    private List<AllocationRowDto> _allocations = [];
+    private decimal _maxHours;
+    private decimal _totalHours;
+    private decimal _remainingHours;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _engineer = await EngineerService.GetByIdAsync(EngineerId);
+        await LoadAllocations();
+    }
+
+    private async Task LoadAllocations()
+    {
+        _allocations = await AllocationService.GetByEngineerAsync(EngineerId, _year, _month);
+        _maxHours = AllocationService.GetMaxDevelopableHours(EngineerId, _year, _month);
+        _totalHours = _allocations.Sum(a => a.AllocatedHours);
+        _remainingHours = _maxHours - _totalHours;
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var themes = await ThemeService.GetAllAsync(activeOnly: true);
+        var usedThemeIds = _allocations.Select(a => a.ThemeId).ToHashSet();
+        var availableThemes = themes.Where(t => !usedThemeIds.Contains(t.Id)).ToList();
+
+        if (!availableThemes.Any())
+        {
+            Snackbar.Add("追加できるテーマがありません（全テーマ割り当て済み）", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<EngineerAllocationDialog>
+        {
+            { x => x.EngineerId, EngineerId },
+            { x => x.Year, _year },
+            { x => x.Month, _month },
+            { x => x.AvailableThemes, availableThemes }
+        };
+        var dialog = await DialogService.ShowAsync<EngineerAllocationDialog>("テーマ割り当て追加", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAllocations();
+    }
+
+    private async Task OpenEditDialog(AllocationRowDto row)
+    {
+        var parameters = new DialogParameters<EngineerAllocationDialog>
+        {
+            { x => x.EngineerId, EngineerId },
+            { x => x.Year, _year },
+            { x => x.Month, _month },
+            { x => x.AvailableThemes, [] },
+            { x => x.EditThemeId, row.ThemeId },
+            { x => x.EditThemeName, row.ThemeName },
+            { x => x.EditHours, row.AllocatedHours }
+        };
+        var dialog = await DialogService.ShowAsync<EngineerAllocationDialog>("割り当て編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAllocations();
+    }
+
+    private async Task DeleteAsync(AllocationRowDto row)
+    {
+        var confirmed = await ConfirmAsync("削除確認", $"「{row.ThemeName}」への割り当てを削除しますか？", "削除");
+        if (confirmed)
+        {
+            await AllocationService.DeleteAllocationAsync(row.Id);
+            Snackbar.Add("削除しました", Severity.Success);
+            await LoadAllocations();
+        }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/engineers");
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK")
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, message },
+            { x => x.ConfirmText, confirmText },
+            { x => x.ConfirmColor, Color.Error }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(title, parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false };
+    }
+}

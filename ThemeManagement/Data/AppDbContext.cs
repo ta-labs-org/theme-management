@@ -1,0 +1,60 @@
+using Microsoft.EntityFrameworkCore;
+using ThemeManagement.Domain.Entities;
+
+namespace ThemeManagement.Data;
+
+public class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    public DbSet<Grade> Grades => Set<Grade>();
+    public DbSet<Engineer> Engineers => Set<Engineer>();
+    public DbSet<MonthlyWorkDays> MonthlyWorkDays => Set<MonthlyWorkDays>();
+    public DbSet<EngineerMonthlyAdjustment> EngineerMonthlyAdjustments => Set<EngineerMonthlyAdjustment>();
+    public DbSet<Theme> Themes => Set<Theme>();
+    public DbSet<EngineerThemeAllocation> EngineerThemeAllocations => Set<EngineerThemeAllocation>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<MonthlyWorkDays>()
+            .HasIndex(e => new { e.Year, e.Month }).IsUnique();
+
+        modelBuilder.Entity<EngineerMonthlyAdjustment>()
+            .HasIndex(e => new { e.EngineerId, e.Year, e.Month }).IsUnique();
+
+        modelBuilder.Entity<EngineerThemeAllocation>()
+            .HasIndex(e => new { e.EngineerId, e.ThemeId, e.Year, e.Month }).IsUnique();
+    }
+
+    public override int SaveChanges()
+    {
+        SetTimestamps();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        SetTimestamps();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void SetTimestamps()
+    {
+        var now = DateTime.Now;
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                var createdAt = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "CreatedAt");
+                if (createdAt != null) createdAt.CurrentValue = now;
+                var updatedAt = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "UpdatedAt");
+                if (updatedAt != null) updatedAt.CurrentValue = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                var updatedAt = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "UpdatedAt");
+                if (updatedAt != null) updatedAt.CurrentValue = now;
+            }
+        }
+    }
+}

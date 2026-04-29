@@ -1,0 +1,50 @@
+@inject IWorkDayService WorkDayService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @if (Adjustment.Id == 0)
+            {
+                <MudSelect T="int" @bind-Value="Adjustment.EngineerId" Label="エンジニア" Required="true">
+                    @foreach (var e in AvailableEngineers)
+                    {
+                        <MudSelectItem T="int" Value="@e.Id">@e.Name（@e.Grade.Name）</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else
+            {
+                <MudText><strong>エンジニア:</strong> @EngineerName</MudText>
+            }
+            <MudNumericField T="int" @bind-Value="Adjustment.WorkDays" Label="実稼働日数（日）" Min="0" Max="31" Required="true" />
+            <MudTextField @bind-Value="Adjustment.Note" Label="備考（有給・慶弔等）" />
+            <MudText Typo="Typo.caption">最大開発可能: @(Adjustment.WorkDays * 8m * 0.9m) h</MudText>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public EngineerMonthlyAdjustment Adjustment { get; set; } = new();
+    [Parameter] public List<Engineer> AvailableEngineers { get; set; } = [];
+    [Parameter] public string? EngineerName { get; set; }
+
+    private async Task Submit()
+    {
+        if (Adjustment.EngineerId == 0)
+        {
+            Snackbar.Add("エンジニアを選択してください", Severity.Warning);
+            return;
+        }
+        await WorkDayService.SaveAdjustmentAsync(Adjustment);
+        Snackbar.Add("保存しました", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

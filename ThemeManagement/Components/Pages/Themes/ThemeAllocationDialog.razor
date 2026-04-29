@@ -1,0 +1,70 @@
+@inject IAllocationService AllocationService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @if (EditEngineerId.HasValue)
+            {
+                <MudText><strong>エンジニア:</strong> @EditEngineerName</MudText>
+                <MudNumericField T="decimal" @bind-Value="_hours" Label="割り当て時間（h）" Min="0.5M" Step="0.5M" Required="true" />
+            }
+            else
+            {
+                <MudSelect T="int" @bind-Value="_selectedEngineerId" Label="エンジニア" Required="true">
+                    @foreach (var e in AvailableEngineers)
+                    {
+                        <MudSelectItem T="int" Value="@e.Id">@e.Name（@e.Grade.Name）</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudNumericField T="decimal" @bind-Value="_hours" Label="割り当て時間（h）" Min="0.5M" Step="0.5M" Required="true" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ThemeId { get; set; }
+    [Parameter] public int Year { get; set; }
+    [Parameter] public int Month { get; set; }
+    [Parameter] public List<Engineer> AvailableEngineers { get; set; } = [];
+    [Parameter] public int? EditEngineerId { get; set; }
+    [Parameter] public string? EditEngineerName { get; set; }
+    [Parameter] public decimal EditHours { get; set; }
+
+    private int _selectedEngineerId;
+    private decimal _hours;
+
+    protected override void OnParametersSet()
+    {
+        _hours = EditHours > 0 ? EditHours : 0.5m;
+        if (AvailableEngineers.Any()) _selectedEngineerId = AvailableEngineers.First().Id;
+    }
+
+    private async Task Submit()
+    {
+        var engineerId = EditEngineerId ?? _selectedEngineerId;
+        if (engineerId == 0)
+        {
+            Snackbar.Add("エンジニアを選択してください", Severity.Warning);
+            return;
+        }
+        try
+        {
+            await AllocationService.UpsertAllocationAsync(engineerId, ThemeId, Year, Month, _hours);
+            Snackbar.Add("保存しました", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (BusinessRuleException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

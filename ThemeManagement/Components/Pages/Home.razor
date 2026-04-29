@@ -1,0 +1,94 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject IDashboardService DashboardService
+
+<PageTitle>ダッシュボード</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">ダッシュボード</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+        <MudNumericField T="int" @bind-Value="_year" Label="年" Min="2020" Max="2100" Style="width:100px" />
+        <MudNumericField T="int" @bind-Value="_month" Label="月" Min="1" Max="12" Style="width:80px" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadData">更新</MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudText Typo="Typo.h6" Class="mb-2">エンジニア稼働サマリ（@(_year)年@(_month)月）</MudText>
+<MudTable Items="_engineerSummaries" Dense="true" Hover="true" Elevation="2" Class="mb-6">
+    <HeaderContent>
+        <MudTh>エンジニア</MudTh>
+        <MudTh>等級</MudTh>
+        <MudTh Style="text-align:right">最大開発可能(h)</MudTh>
+        <MudTh Style="text-align:right">割り当て合計(h)</MudTh>
+        <MudTh Style="text-align:right">残余(h)</MudTh>
+        <MudTh Style="text-align:right">稼働率(%)</MudTh>
+        <MudTh>詳細</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.EngineerName</MudTd>
+        <MudTd>@context.GradeName</MudTd>
+        <MudTd Style="text-align:right">@context.MaxDevelopableHours.ToString("F1")</MudTd>
+        <MudTd Style="text-align:right">@context.TotalAllocatedHours.ToString("F1")</MudTd>
+        <MudTd Style="text-align:right">
+            <MudText Color="@(context.RemainingHours < 0 ? Color.Error : Color.Default)">
+                @context.RemainingHours.ToString("F1")
+            </MudText>
+        </MudTd>
+        <MudTd Style="text-align:right">@context.WorkRate.ToString("F1")</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                           Href="@($"/engineers/{context.EngineerId}/allocation")" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>データがありません</MudText></NoRecordsContent>
+</MudTable>
+
+<MudText Typo="Typo.h6" Class="mb-2">テーマ進捗サマリ（アクティブ案件）</MudText>
+<MudTable Items="_themeProgress" Dense="true" Hover="true" Elevation="2">
+    <HeaderContent>
+        <MudTh>テーマ名</MudTh>
+        <MudTh Style="text-align:right">受注金額(円)</MudTh>
+        <MudTh Style="text-align:right">累計稼働金額(円)</MudTh>
+        <MudTh Style="text-align:right">消化率(%)</MudTh>
+        <MudTh Style="text-align:right">残余金額(円)</MudTh>
+        <MudTh>完了見込み</MudTh>
+        <MudTh>詳細</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.ThemeName</MudTd>
+        <MudTd Style="text-align:right">@context.OrderAmount.ToString("N0")</MudTd>
+        <MudTd Style="text-align:right">@context.TotalAllocatedCost.ToString("N0")</MudTd>
+        <MudTd Style="text-align:right">
+            <MudText Color="@(context.ProgressRate > 100 ? Color.Error : Color.Default)">
+                @context.ProgressRate.ToString("F1")
+            </MudText>
+        </MudTd>
+        <MudTd Style="text-align:right">@context.RemainingAmount.ToString("N0")</MudTd>
+        <MudTd>
+            @(context.EstimatedCompletionYear.HasValue
+                ? $"{context.EstimatedCompletionYear}年{context.EstimatedCompletionMonth}月"
+                : "-")
+        </MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                           Href="@($"/themes/{context.ThemeId}/allocation")" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>アクティブなテーマがありません</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private int _year = DateTime.Now.Year;
+    private int _month = DateTime.Now.Month;
+    private List<EngineerWorkSummaryDto> _engineerSummaries = [];
+    private List<ThemeProgressDto> _themeProgress = [];
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        _engineerSummaries = await DashboardService.GetEngineerSummaryAsync(_year, _month);
+        _themeProgress = await DashboardService.GetThemeProgressAsync();
+    }
+}

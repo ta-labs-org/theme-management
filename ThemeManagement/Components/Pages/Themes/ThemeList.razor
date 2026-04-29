@@ -1,0 +1,102 @@
+@page "/themes"
+@rendermode InteractiveServer
+@inject IThemeService ThemeService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>テーマ・案件一覧</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">テーマ・案件一覧</MudText>
+
+<MudStack Row="true" Spacing="3" Class="mb-4" AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenAddDialog">新規登録</MudButton>
+    <MudCheckBox T="bool" Value="_showAll" ValueChanged="@(async v => { _showAll = v; await LoadAsync(); })" Label="完了・中止も表示" />
+</MudStack>
+
+<MudTable Items="_themes" Dense="true" Hover="true" Elevation="2">
+    <HeaderContent>
+        <MudTh>テーマNo</MudTh>
+        <MudTh>テーマ名</MudTh>
+        <MudTh>受注区分</MudTh>
+        <MudTh>受注日</MudTh>
+        <MudTh>完了予定日</MudTh>
+        <MudTh Style="text-align:right">受注金額(円)</MudTh>
+        <MudTh>状態</MudTh>
+        <MudTh>操作</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.ThemeNo</MudTd>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>@context.OrderType</MudTd>
+        <MudTd>@context.OrderDate.ToString("yyyy/MM/dd")</MudTd>
+        <MudTd>@context.EstimatedCompletionDate.ToString("yyyy/MM/dd")</MudTd>
+        <MudTd Style="text-align:right">@context.OrderAmount.ToString("N0")</MudTd>
+        <MudTd>
+            <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">
+                @StatusLabel(context.Status)
+            </MudChip>
+        </MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+            <MudIconButton Icon="@Icons.Material.Filled.BarChart" Size="Size.Small" Color="Color.Info"
+                           Href="@($"/themes/{context.Id}/allocation")" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>テーマが登録されていません</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private List<Theme> _themes = [];
+    private bool _showAll = false;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _themes = await ThemeService.GetAllAsync(!_showAll);
+
+    private async Task OpenAddDialog()
+    {
+        var theme = new Theme
+        {
+            OrderDate = DateOnly.FromDateTime(DateTime.Today),
+            EstimatedCompletionDate = DateOnly.FromDateTime(DateTime.Today.AddMonths(3)),
+            Status = "Active"
+        };
+        var parameters = new DialogParameters<ThemeEditDialog> { { x => x.Theme, theme } };
+        var dialog = await DialogService.ShowAsync<ThemeEditDialog>("テーマ登録", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenEditDialog(Theme theme)
+    {
+        var copy = new Theme
+        {
+            Id = theme.Id, ThemeNo = theme.ThemeNo, Name = theme.Name, OrderType = theme.OrderType,
+            OrderDate = theme.OrderDate,
+            EstimatedCompletionDate = theme.EstimatedCompletionDate,
+            ActualCompletionDate = theme.ActualCompletionDate,
+            OrderAmount = theme.OrderAmount, Status = theme.Status
+        };
+        var parameters = new DialogParameters<ThemeEditDialog> { { x => x.Theme, copy } };
+        var dialog = await DialogService.ShowAsync<ThemeEditDialog>("テーマ編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private static Color StatusColor(string status) => status switch
+    {
+        "Active" => Color.Success,
+        "Completed" => Color.Info,
+        "Cancelled" => Color.Default,
+        _ => Color.Default
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "Active" => "進行中",
+        "Completed" => "完了",
+        "Cancelled" => "中止",
+        _ => status
+    };
+}

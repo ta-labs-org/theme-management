@@ -1,0 +1,86 @@
+@page "/grades"
+@rendermode InteractiveServer
+@inject IGradeService GradeService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>等級マスタ</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">等級マスタ</MudText>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+           OnClick="OpenAddDialog" Class="mb-4">新規追加</MudButton>
+
+<MudTable Items="_grades" Dense="true" Hover="true" Elevation="2">
+    <HeaderContent>
+        <MudTh>等級名</MudTh>
+        <MudTh Style="text-align:right">売価（円/h）</MudTh>
+        <MudTh Style="text-align:right">原価（円/h）</MudTh>
+        <MudTh>操作</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd>
+        <MudTd Style="text-align:right">@context.UnitSalePrice.ToString("N0")</MudTd>
+        <MudTd Style="text-align:right">@context.UnitCostPrice.ToString("N0")</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                           OnClick="() => DeleteAsync(context)" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>等級が登録されていません</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private List<Grade> _grades = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _grades = await GradeService.GetAllAsync();
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters<GradeEditDialog> { { x => x.Grade, new Grade() } };
+        var dialog = await DialogService.ShowAsync<GradeEditDialog>("等級追加", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenEditDialog(Grade grade)
+    {
+        var copy = new Grade { Id = grade.Id, Name = grade.Name, UnitSalePrice = grade.UnitSalePrice, UnitCostPrice = grade.UnitCostPrice };
+        var parameters = new DialogParameters<GradeEditDialog> { { x => x.Grade, copy } };
+        var dialog = await DialogService.ShowAsync<GradeEditDialog>("等級編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Grade grade)
+    {
+        if (await GradeService.IsUsedAsync(grade.Id))
+        {
+            Snackbar.Add("この等級はエンジニアに使用されているため削除できません", Severity.Warning);
+            return;
+        }
+        var confirmed = await ConfirmAsync("削除確認", $"「{grade.Name}」を削除しますか？", "削除");
+        if (confirmed)
+        {
+            await GradeService.DeleteAsync(grade.Id);
+            Snackbar.Add("削除しました", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK")
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, message },
+            { x => x.ConfirmText, confirmText },
+            { x => x.ConfirmColor, Color.Error }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(title, parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false };
+    }
+}

@@ -1,0 +1,104 @@
+@page "/engineers"
+@rendermode InteractiveServer
+@inject IEngineerService EngineerService
+@inject IGradeService GradeService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>エンジニア一覧</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">エンジニア一覧</MudText>
+
+<MudStack Row="true" Spacing="3" Class="mb-4" AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenAddDialog">新規追加</MudButton>
+    <MudCheckBox T="bool" Value="_showInactive" ValueChanged="@(async v => { _showInactive = v; await LoadAsync(); })" Label="退職者を含める" />
+</MudStack>
+
+<MudTable Items="_engineers" Dense="true" Hover="true" Elevation="2">
+    <HeaderContent>
+        <MudTh>エンジニア名</MudTh>
+        <MudTh>等級</MudTh>
+        <MudTh>状態</MudTh>
+        <MudTh>操作</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>@context.Grade.Name</MudTd>
+        <MudTd>
+            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                @(context.IsActive ? "在籍" : "退職")
+            </MudChip>
+        </MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+            <MudIconButton Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" Color="Color.Info"
+                           Href="@($"/engineers/{context.Id}/allocation")" />
+            @if (context.IsActive)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.PersonOff" Size="Size.Small" Color="Color.Warning"
+                               OnClick="() => DeactivateAsync(context)" />
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>エンジニアが登録されていません</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private List<Engineer> _engineers = [];
+    private bool _showInactive = false;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _engineers = await EngineerService.GetAllAsync(_showInactive);
+
+    private async Task OpenAddDialog()
+    {
+        var grades = await GradeService.GetAllAsync();
+        var parameters = new DialogParameters<EngineerEditDialog>
+        {
+            { x => x.Engineer, new Engineer() },
+            { x => x.Grades, grades }
+        };
+        var dialog = await DialogService.ShowAsync<EngineerEditDialog>("エンジニア追加", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenEditDialog(Engineer engineer)
+    {
+        var grades = await GradeService.GetAllAsync();
+        var copy = new Engineer { Id = engineer.Id, Name = engineer.Name, GradeId = engineer.GradeId, IsActive = engineer.IsActive };
+        var parameters = new DialogParameters<EngineerEditDialog>
+        {
+            { x => x.Engineer, copy },
+            { x => x.Grades, grades }
+        };
+        var dialog = await DialogService.ShowAsync<EngineerEditDialog>("エンジニア編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeactivateAsync(Engineer engineer)
+    {
+        var confirmed = await ConfirmAsync("退職処理", $"「{engineer.Name}」を退職済みにしますか？", "確定");
+        if (confirmed)
+        {
+            await EngineerService.DeactivateAsync(engineer.Id);
+            Snackbar.Add("退職処理しました", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK")
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, message },
+            { x => x.ConfirmText, confirmText }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(title, parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false };
+    }
+}

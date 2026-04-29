@@ -1,0 +1,141 @@
+using Microsoft.EntityFrameworkCore;
+using ThemeManagement.Data;
+using ThemeManagement.Domain.Entities;
+using ThemeManagement.Domain.Exceptions;
+using ThemeManagement.Models;
+
+namespace ThemeManagement.Services;
+
+public interface IAllocationService
+{
+    Task<List<AllocationRowDto>> GetByEngineerAsync(int engineerId, int year, int month);
+    Task<List<AllocationRowDto>> GetByThemeAsync(int themeId, int year, int month);
+    decimal GetMaxDevelopableHours(int engineerId, int year, int month);
+    decimal GetTotalAllocatedHoursByEngineer(int engineerId, int year, int month, int? excludeId = null);
+    decimal GetTotalAllocatedCostByTheme(int themeId, int? excludeId = null);
+    Task UpsertAllocationAsync(int engineerId, int themeId, int year, int month, decimal hours);
+    Task DeleteAllocationAsync(int id);
+}
+
+public class AllocationService : IAllocationService
+{
+    private readonly AppDbContext _db;
+    public AllocationService(AppDbContext db) => _db = db;
+
+    public Task<List<AllocationRowDto>> GetByEngineerAsync(int engineerId, int year, int month) =>
+        _db.EngineerThemeAllocations
+            .Include(a => a.Engineer).ThenInclude(e => e.Grade)
+            .Include(a => a.Theme)
+            .Where(a => a.EngineerId == engineerId && a.Year == year && a.Month == month)
+            .Select(a => new AllocationRowDto(
+                a.Id, a.EngineerId, a.Engineer.Name, a.Engineer.GradeId,
+                a.Engineer.Grade.Name, a.Engineer.Grade.UnitSalePrice,
+                a.ThemeId, a.Theme.Name, a.Year, a.Month, a.AllocatedHours))
+            .ToListAsync();
+
+    public Task<List<AllocationRowDto>> GetByThemeAsync(int themeId, int year, int month) =>
+        _db.EngineerThemeAllocations
+            .Include(a => a.Engineer).ThenInclude(e => e.Grade)
+            .Include(a => a.Theme)
+            .Where(a => a.ThemeId == themeId && a.Year == year && a.Month == month)
+            .Select(a => new AllocationRowDto(
+                a.Id, a.EngineerId, a.Engineer.Name, a.Engineer.GradeId,
+                a.Engineer.Grade.Name, a.Engineer.Grade.UnitSalePrice,
+                a.ThemeId, a.Theme.Name, a.Year, a.Month, a.AllocatedHours))
+            .ToListAsync();
+
+    public decimal GetMaxDevelopableHours(int engineerId, int year, int month)
+    {
+        var adjustment = _db.EngineerMonthlyAdjustments
+            .AsNoTracking()
+            .FirstOrDefault(a => a.EngineerId == engineerId && a.Year == year && a.Month == month);
+
+        int workDays = adjustment?.WorkDays
+            ?? _db.MonthlyWorkDays.AsNoTracking().FirstOrDefault(m => m.Year == year && m.Month == month)?.WorkDays
+            ?? 0;
+
+        return workDays * 8m * 0.9m;
+    }
+
+    public decimal GetTotalAllocatedHoursByEngineer(int engineerId, int year, int month, int? excludeId = null)
+    {
+        var query = _db.EngineerThemeAllocations
+            .Where(a => a.EngineerId == engineerId && a.Year == year && a.Month == month);
+        if (excludeId.HasValue)
+            query = query.Where(a => a.Id != excludeId.Value);
+        return query.Sum(a => (decimal?)a.AllocatedHours) ?? 0m;
+    }
+
+    public decimal GetTotalAllocatedCostByTheme(int themeId, int? excludeId = null)
+    {
+        var query = _db.EngineerThemeAllocations
+            .AsNoTracking()
+            .Include(a => a.Engineer).ThenInclude(e => e.Grade)
+            .Where(a => a.ThemeId == themeId);
+        if (excludeId.HasValue)
+            query = query.Where(a => a.Id != excludeId.Value);
+        return query.AsEnumerable().Sum(a => a.AllocatedHours * a.Engineer.Grade.UnitSalePrice);
+    }
+
+    public async Task UpsertAllocationAsync(int engineerId, int themeId, int year, int month, decimal hours)
+    {
+        if (hours <= 0)
+            throw new BusinessRuleException("割り当て時間は0より大きい値を入力してください");
+
+        var existing = await _db.EngineerThemeAllocations
+            .FirstOrDefaultAsync(a => a.EngineerId == engineerId && a.ThemeId == themeId
+                                      && a.Year == year && a.Month == month);
+
+        int? excludeId = existing?.Id;
+
+        // エンジニア稼働上限チェック
+        var maxHours = GetMaxDevelopableHours(engineerId, year, month);
+        var currentEngTotal = GetTotalAllocatedHoursByEngineer(engineerId, year, month, excludeId);
+        if (currentEngTotal + hours > maxHours)
+        {
+            var engineer = await _db.Engineers.FindAsync(engineerId);
+            throw new BusinessRuleException(
+                $"{engineer?.Name} の {year}/{month:D2} 稼働上限（{maxHours:F1}h）を超えます（入力後合計: {currentEngTotal + hours:F1}h）");
+        }
+
+        // テーマ受注金額チェック
+        var theme = await _db.Themes.FindAsync(themeId)
+            ?? throw new BusinessRuleException("テーマが見つかりません");
+        var eng = await _db.Engineers.AsNoTracking().Include(e => e.Grade).FirstAsync(e => e.Id == engineerId);
+        var addedCost = hours * eng.Grade.UnitSalePrice;
+        var currentCost = GetTotalAllocatedCostByTheme(themeId, excludeId);
+        if (currentCost + addedCost > theme.OrderAmount)
+        {
+            throw new BusinessRuleException(
+                $"{theme.Name} の受注金額（{theme.OrderAmount:N0}円）を超えます（入力後累計: {currentCost + addedCost:N0}円）");
+        }
+
+        if (existing == null)
+        {
+            _db.EngineerThemeAllocations.Add(new EngineerThemeAllocation
+            {
+                EngineerId = engineerId,
+                ThemeId = themeId,
+                Year = year,
+                Month = month,
+                AllocatedHours = hours
+            });
+        }
+        else
+        {
+            existing.AllocatedHours = hours;
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task DeleteAllocationAsync(int id)
+    {
+        var allocation = await _db.EngineerThemeAllocations.FindAsync(id);
+        if (allocation != null)
+        {
+            _db.EngineerThemeAllocations.Remove(allocation);
+            await _db.SaveChangesAsync();
+        }
+    }
+}

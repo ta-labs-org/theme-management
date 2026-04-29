@@ -1,0 +1,70 @@
+@inject IAllocationService AllocationService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @if (EditThemeId.HasValue)
+            {
+                <MudText><strong>テーマ:</strong> @EditThemeName</MudText>
+                <MudNumericField T="decimal" @bind-Value="_hours" Label="割り当て時間（h）" Min="0.5M" Step="0.5M" Required="true" />
+            }
+            else
+            {
+                <MudSelect T="int" @bind-Value="_selectedThemeId" Label="テーマ" Required="true">
+                    @foreach (var t in AvailableThemes)
+                    {
+                        <MudSelectItem T="int" Value="@t.Id">@t.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudNumericField T="decimal" @bind-Value="_hours" Label="割り当て時間（h）" Min="0.5M" Step="0.5M" Required="true" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int EngineerId { get; set; }
+    [Parameter] public int Year { get; set; }
+    [Parameter] public int Month { get; set; }
+    [Parameter] public List<Theme> AvailableThemes { get; set; } = [];
+    [Parameter] public int? EditThemeId { get; set; }
+    [Parameter] public string? EditThemeName { get; set; }
+    [Parameter] public decimal EditHours { get; set; }
+
+    private int _selectedThemeId;
+    private decimal _hours;
+
+    protected override void OnParametersSet()
+    {
+        _hours = EditHours > 0 ? EditHours : 0.5m;
+        if (AvailableThemes.Any()) _selectedThemeId = AvailableThemes.First().Id;
+    }
+
+    private async Task Submit()
+    {
+        var themeId = EditThemeId ?? _selectedThemeId;
+        if (themeId == 0)
+        {
+            Snackbar.Add("テーマを選択してください", Severity.Warning);
+            return;
+        }
+        try
+        {
+            await AllocationService.UpsertAllocationAsync(EngineerId, themeId, Year, Month, _hours);
+            Snackbar.Add("保存しました", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (BusinessRuleException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

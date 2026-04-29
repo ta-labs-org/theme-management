@@ -1,0 +1,162 @@
+@page "/themes/{ThemeId:int}/allocation"
+@rendermode InteractiveServer
+@inject IThemeService ThemeService
+@inject IAllocationService AllocationService
+@inject IEngineerService EngineerService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Nav
+
+<PageTitle>テーマ稼働管理</PageTitle>
+
+@if (_theme == null)
+{
+    <MudText>読み込み中...</MudText>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" />
+        <MudText Typo="Typo.h5">@_theme.Name　稼働管理</MudText>
+    </MudStack>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudStack Row="true" Spacing="4" Class="mb-2">
+            <MudText>受注金額: <strong>@_theme.OrderAmount.ToString("N0") 円</strong></MudText>
+            <MudText>累計稼働金額: <strong>@_totalCost.ToString("N0") 円</strong></MudText>
+            <MudText Color="@(_progressRate > 100 ? Color.Error : Color.Default)">
+                消化率: <strong>@_progressRate.ToString("F1") %</strong>
+            </MudText>
+            <MudText>残余: <strong>@_remainingAmount.ToString("N0") 円</strong></MudText>
+        </MudStack>
+        <MudDivider Class="my-3" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+            <MudNumericField T="int" @bind-Value="_year" Label="年" Min="2020" Max="2100" Style="width:100px" />
+            <MudNumericField T="int" @bind-Value="_month" Label="月" Min="1" Max="12" Style="width:80px" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAllocations">更新</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenAddDialog" Class="mb-3">エンジニア追加</MudButton>
+
+    <MudTable Items="_allocations" Dense="true" Hover="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>エンジニア</MudTh>
+            <MudTh>等級</MudTh>
+            <MudTh Style="text-align:right">割り当て(h)</MudTh>
+            <MudTh Style="text-align:right">単価(円/h)</MudTh>
+            <MudTh Style="text-align:right">売価小計(円)</MudTh>
+            <MudTh>操作</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.EngineerName</MudTd>
+            <MudTd>@context.GradeName</MudTd>
+            <MudTd Style="text-align:right">@context.AllocatedHours.ToString("F1")</MudTd>
+            <MudTd Style="text-align:right">@context.UnitSalePrice.ToString("N0")</MudTd>
+            <MudTd Style="text-align:right">@((context.AllocatedHours * context.UnitSalePrice).ToString("N0"))</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="() => DeleteAsync(context)" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText>割り当てがありません</MudText></NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int ThemeId { get; set; }
+
+    private Theme? _theme;
+    private int _year = DateTime.Now.Year;
+    private int _month = DateTime.Now.Month;
+    private List<AllocationRowDto> _allocations = [];
+    private decimal _totalCost;
+    private decimal _progressRate;
+    private decimal _remainingAmount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _theme = await ThemeService.GetByIdAsync(ThemeId);
+        await LoadAllocations();
+    }
+
+    private async Task LoadAllocations()
+    {
+        _allocations = await AllocationService.GetByThemeAsync(ThemeId, _year, _month);
+        _totalCost = AllocationService.GetTotalAllocatedCostByTheme(ThemeId);
+        if (_theme != null)
+        {
+            _progressRate = _theme.OrderAmount > 0 ? _totalCost / _theme.OrderAmount * 100 : 0;
+            _remainingAmount = _theme.OrderAmount - _totalCost;
+        }
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var engineers = await EngineerService.GetAllAsync();
+        var usedIds = _allocations.Select(a => a.EngineerId).ToHashSet();
+        var available = engineers.Where(e => !usedIds.Contains(e.Id)).ToList();
+
+        if (!available.Any())
+        {
+            Snackbar.Add("追加できるエンジニアがいません（全員割り当て済み）", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<ThemeAllocationDialog>
+        {
+            { x => x.ThemeId, ThemeId },
+            { x => x.Year, _year },
+            { x => x.Month, _month },
+            { x => x.AvailableEngineers, available }
+        };
+        var dialog = await DialogService.ShowAsync<ThemeAllocationDialog>("エンジニア割り当て追加", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAllocations();
+    }
+
+    private async Task OpenEditDialog(AllocationRowDto row)
+    {
+        var parameters = new DialogParameters<ThemeAllocationDialog>
+        {
+            { x => x.ThemeId, ThemeId },
+            { x => x.Year, _year },
+            { x => x.Month, _month },
+            { x => x.AvailableEngineers, [] },
+            { x => x.EditEngineerId, row.EngineerId },
+            { x => x.EditEngineerName, row.EngineerName },
+            { x => x.EditHours, row.AllocatedHours }
+        };
+        var dialog = await DialogService.ShowAsync<ThemeAllocationDialog>("割り当て編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAllocations();
+    }
+
+    private async Task DeleteAsync(AllocationRowDto row)
+    {
+        var confirmed = await ConfirmAsync("削除確認", $"{row.EngineerName} の割り当てを削除しますか？", "削除");
+        if (confirmed)
+        {
+            await AllocationService.DeleteAllocationAsync(row.Id);
+            Snackbar.Add("削除しました", Severity.Success);
+            await LoadAllocations();
+        }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/themes");
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK")
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, message },
+            { x => x.ConfirmText, confirmText },
+            { x => x.ConfirmColor, Color.Error }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(title, parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false };
+    }
+}

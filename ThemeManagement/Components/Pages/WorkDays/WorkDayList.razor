@@ -1,0 +1,175 @@
+@page "/workdays"
+@rendermode InteractiveServer
+@inject IWorkDayService WorkDayService
+@inject IEngineerService EngineerService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>稼働日管理</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">稼働日管理</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+        <MudNumericField T="int" @bind-Value="_year" Label="年" Min="2020" Max="2100" Style="width:100px" />
+        <MudNumericField T="int" @bind-Value="_month" Label="月" Min="1" Max="12" Style="width:80px" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">表示</MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudText Typo="Typo.h6" Class="mb-2">全体稼働日（@(_year)年@(_month)月）</MudText>
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    @if (_monthlyWorkDays == null)
+    {
+        <MudText Class="mb-2" Color="Color.Warning">この月の稼働日が未登録です</MudText>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddWorkDayDialog">稼働日を登録</MudButton>
+    }
+    else
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
+            <MudText>稼働日数: <strong>@_monthlyWorkDays.WorkDays 日</strong></MudText>
+            <MudText>最大開発可能（標準）: <strong>@(_monthlyWorkDays.WorkDays * 8m * 0.9m) h</strong></MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="OpenEditWorkDayDialog" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                           OnClick="DeleteWorkDayAsync" />
+        </MudStack>
+    }
+</MudPaper>
+
+<MudText Typo="Typo.h6" Class="mb-2">エンジニア個別調整（@(_year)年@(_month)月）</MudText>
+<MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add"
+           OnClick="OpenAddAdjustmentDialog" Class="mb-3">個別調整を追加</MudButton>
+
+<MudTable Items="_adjustments" Dense="true" Hover="true" Elevation="2">
+    <HeaderContent>
+        <MudTh>エンジニア</MudTh>
+        <MudTh Style="text-align:right">稼働日数</MudTh>
+        <MudTh Style="text-align:right">最大開発可能(h)</MudTh>
+        <MudTh>備考</MudTh>
+        <MudTh>操作</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Engineer.Name</MudTd>
+        <MudTd Style="text-align:right">@context.WorkDays 日</MudTd>
+        <MudTd Style="text-align:right">@(context.WorkDays * 8m * 0.9m) h</MudTd>
+        <MudTd>@context.Note</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditAdjustmentDialog(context)" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                           OnClick="() => DeleteAdjustmentAsync(context)" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>個別調整なし</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private int _year = DateTime.Now.Year;
+    private int _month = DateTime.Now.Month;
+    private MonthlyWorkDays? _monthlyWorkDays;
+    private List<EngineerMonthlyAdjustment> _adjustments = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _monthlyWorkDays = await WorkDayService.GetByYearMonthAsync(_year, _month);
+        _adjustments = await WorkDayService.GetAdjustmentsAsync(_year, _month);
+    }
+
+    private async Task OpenAddWorkDayDialog()
+    {
+        var item = new MonthlyWorkDays { Year = _year, Month = _month };
+        var parameters = new DialogParameters<WorkDayEditDialog> { { x => x.WorkDays, item } };
+        var dialog = await DialogService.ShowAsync<WorkDayEditDialog>("稼働日登録", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenEditWorkDayDialog()
+    {
+        if (_monthlyWorkDays == null) return;
+        var copy = new MonthlyWorkDays { Id = _monthlyWorkDays.Id, Year = _monthlyWorkDays.Year, Month = _monthlyWorkDays.Month, WorkDays = _monthlyWorkDays.WorkDays };
+        var parameters = new DialogParameters<WorkDayEditDialog> { { x => x.WorkDays, copy } };
+        var dialog = await DialogService.ShowAsync<WorkDayEditDialog>("稼働日編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteWorkDayAsync()
+    {
+        if (_monthlyWorkDays == null) return;
+        var confirmed = await ConfirmAsync("削除確認", $"{_year}年{_month}月の稼働日設定を削除しますか？", "削除");
+        if (confirmed)
+        {
+            await WorkDayService.DeleteAsync(_monthlyWorkDays.Id);
+            Snackbar.Add("削除しました", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task OpenAddAdjustmentDialog()
+    {
+        var engineers = await EngineerService.GetAllAsync();
+        var usedIds = _adjustments.Select(a => a.EngineerId).ToHashSet();
+        var available = engineers.Where(e => !usedIds.Contains(e.Id)).ToList();
+
+        if (!available.Any())
+        {
+            Snackbar.Add("調整できるエンジニアがいません（全員調整済み）", Severity.Info);
+            return;
+        }
+
+        var adj = new EngineerMonthlyAdjustment { Year = _year, Month = _month };
+        var parameters = new DialogParameters<AdjustmentDialog>
+        {
+            { x => x.Adjustment, adj },
+            { x => x.AvailableEngineers, available }
+        };
+        var dialog = await DialogService.ShowAsync<AdjustmentDialog>("個別調整追加", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenEditAdjustmentDialog(EngineerMonthlyAdjustment adj)
+    {
+        var copy = new EngineerMonthlyAdjustment
+        {
+            Id = adj.Id, EngineerId = adj.EngineerId, Year = adj.Year,
+            Month = adj.Month, WorkDays = adj.WorkDays, Note = adj.Note
+        };
+        var parameters = new DialogParameters<AdjustmentDialog>
+        {
+            { x => x.Adjustment, copy },
+            { x => x.AvailableEngineers, [] },
+            { x => x.EngineerName, adj.Engineer.Name }
+        };
+        var dialog = await DialogService.ShowAsync<AdjustmentDialog>("個別調整編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteAdjustmentAsync(EngineerMonthlyAdjustment adj)
+    {
+        var confirmed = await ConfirmAsync("削除確認", $"{adj.Engineer.Name} の {_year}/{_month} 個別調整を削除しますか？", "削除");
+        if (confirmed)
+        {
+            await WorkDayService.DeleteAdjustmentAsync(adj.Id);
+            Snackbar.Add("削除しました", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK")
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, message },
+            { x => x.ConfirmText, confirmText },
+            { x => x.ConfirmColor, Color.Error }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(title, parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false };
+    }
+}

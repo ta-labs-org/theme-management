@@ -1,0 +1,69 @@
+@inject IThemeService ThemeService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="Theme.ThemeNo" Label="テーマNo" Immediate="true" />
+            <MudTextField @bind-Value="Theme.Name" Label="テーマ名" Required="true" Immediate="true" />
+            <MudSelect T="string" @bind-Value="Theme.OrderType" Label="受注区分" Required="true">
+                <MudSelectItem T="string" Value="@("見積")">見積</MudSelectItem>
+                <MudSelectItem T="string" Value="@("機動的開発")">機動的開発</MudSelectItem>
+            </MudSelect>
+            <MudDatePicker Label="受注日" Date="_orderDate" DateChanged="d => { _orderDate = d; if (d.HasValue) Theme.OrderDate = DateOnly.FromDateTime(d.Value); }"
+                           Required="true" DateFormat="yyyy/MM/dd" />
+            <MudDatePicker Label="完了予定日" Date="_estimatedDate" DateChanged="d => { _estimatedDate = d; if (d.HasValue) Theme.EstimatedCompletionDate = DateOnly.FromDateTime(d.Value); }"
+                           Required="true" DateFormat="yyyy/MM/dd" />
+            <MudNumericField T="decimal" @bind-Value="Theme.OrderAmount" Label="受注金額（円）" Min="1" Required="true" />
+            <MudSelect T="string" @bind-Value="Theme.Status" Label="状態" Required="true">
+                <MudSelectItem T="string" Value="@("Active")">進行中</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Completed")">完了</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Cancelled")">中止</MudSelectItem>
+            </MudSelect>
+            @if (Theme.Status == "Completed")
+            {
+                <MudDatePicker Label="実完了日" Date="_actualDate" DateChanged="d => { _actualDate = d; Theme.ActualCompletionDate = d.HasValue ? DateOnly.FromDateTime(d.Value) : null; }"
+                               DateFormat="yyyy/MM/dd" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Theme Theme { get; set; } = new();
+
+    private DateTime? _orderDate;
+    private DateTime? _estimatedDate;
+    private DateTime? _actualDate;
+
+    protected override void OnParametersSet()
+    {
+        _orderDate = Theme.OrderDate == default ? null : Theme.OrderDate.ToDateTime(TimeOnly.MinValue);
+        _estimatedDate = Theme.EstimatedCompletionDate == default ? null : Theme.EstimatedCompletionDate.ToDateTime(TimeOnly.MinValue);
+        _actualDate = Theme.ActualCompletionDate.HasValue ? Theme.ActualCompletionDate.Value.ToDateTime(TimeOnly.MinValue) : null;
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(Theme.Name))
+        {
+            Snackbar.Add("テーマ名を入力してください", Severity.Warning);
+            return;
+        }
+        if (Theme.OrderAmount <= 0)
+        {
+            Snackbar.Add("受注金額は0より大きい値を入力してください", Severity.Warning);
+            return;
+        }
+        await ThemeService.SaveAsync(Theme);
+        Snackbar.Add("保存しました", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

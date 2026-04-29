@@ -1,0 +1,35 @@
+@inject IGradeService GradeService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="Grade.Name" Label="等級名" Required="true" Immediate="true" />
+            <MudNumericField T="decimal" @bind-Value="Grade.UnitSalePrice" Label="売価（円/h）" Min="0" Required="true" />
+            <MudNumericField T="decimal" @bind-Value="Grade.UnitCostPrice" Label="原価（円/h）" Min="0" Required="true" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Grade Grade { get; set; } = new();
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(Grade.Name))
+        {
+            Snackbar.Add("等級名を入力してください", Severity.Warning);
+            return;
+        }
+        await GradeService.SaveAsync(Grade);
+        Snackbar.Add("保存しました", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
