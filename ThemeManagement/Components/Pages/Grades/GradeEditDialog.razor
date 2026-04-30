@@ -1,6 +1,7 @@
 @inject IGradeService GradeService
 @inject ISnackbar Snackbar
 @inject ILogger<GradeEditDialog> Logger
+@using ThemeManagement.Domain.Entities
 
 <MudDialog>
     <DialogContent>
@@ -8,6 +9,26 @@
             <MudTextField @bind-Value="Grade.Name" Label="等級名" Required="true" Immediate="true" />
             <MudNumericField T="decimal" @bind-Value="Grade.UnitSalePrice" Label="売価（円/h）" Min="0" Required="true" />
             <MudNumericField T="decimal" @bind-Value="Grade.UnitCostPrice" Label="原価（円/h）" Min="0" Required="true" />
+
+            @if (Grade.Id != 0 && _histories.Count > 0)
+            {
+                <MudExpansionPanels Elevation="0">
+                    <MudExpansionPanel Text="単価変更履歴" Dense="true">
+                        <MudTable Items="_histories" Dense="true" Elevation="0">
+                            <HeaderContent>
+                                <MudTh>適用開始日</MudTh>
+                                <MudTh Style="text-align:right">売価(円/h)</MudTh>
+                                <MudTh Style="text-align:right">原価(円/h)</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>@context.ValidFrom.ToString("yyyy/MM/dd")</MudTd>
+                                <MudTd Style="text-align:right">@context.UnitSalePrice.ToString("N0")</MudTd>
+                                <MudTd Style="text-align:right">@context.UnitCostPrice.ToString("N0")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            }
         </MudStack>
     </DialogContent>
     <DialogActions>
@@ -19,6 +40,14 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Grade Grade { get; set; } = new();
+
+    private List<GradePriceHistory> _histories = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Grade.Id != 0)
+            _histories = await GradeService.GetPriceHistoriesAsync(Grade.Id);
+    }
 
     private async Task Submit()
     {

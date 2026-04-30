@@ -10,4 +10,5 @@ public class Grade
     public DateTime UpdatedAt { get; set; }
 
     public ICollection<Engineer> Engineers { get; set; } = new List<Engineer>();
+    public ICollection<GradePriceHistory> PriceHistories { get; set; } = new List<GradePriceHistory>();
 }

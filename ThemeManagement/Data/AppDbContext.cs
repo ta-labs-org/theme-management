@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<Theme> Themes => Set<Theme>();
     public DbSet<EngineerThemeAllocation> EngineerThemeAllocations => Set<EngineerThemeAllocation>();
     public DbSet<ThemeCarryOver> ThemeCarryOvers => Set<ThemeCarryOver>();
+    public DbSet<GradePriceHistory> GradePriceHistories => Set<GradePriceHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
