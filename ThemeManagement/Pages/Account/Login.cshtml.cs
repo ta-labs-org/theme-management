@@ -51,10 +51,16 @@ public class LoginModel : PageModel
         }
 
         var result = await _signInManager.PasswordSignInAsync(
-            Input.Email, Input.Password, isPersistent: false, lockoutOnFailure: false);
+            Input.Email, Input.Password, isPersistent: false, lockoutOnFailure: true);
 
         if (result.Succeeded)
             return LocalRedirect(returnUrl);
+
+        if (result.IsLockedOut)
+        {
+            ErrorMessage = "アカウントがロックされています。しばらくしてから再試行してください。";
+            return Page();
+        }
 
         ErrorMessage = "メールアドレスまたはパスワードが正しくありません。";
         return Page();

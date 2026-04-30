@@ -24,12 +24,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // ASP.NET Core Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
-    options.Password.RequireDigit = false;
-    options.Password.RequireLowercase = false;
+    options.Password.RequireDigit = true;
+    options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = false;
     options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequiredLength = 6;
+    options.Password.RequiredLength = 8;
     options.SignIn.RequireConfirmedAccount = false;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.AllowedForNewUsers = true;
 })
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
@@ -66,7 +69,8 @@ using (var scope = app.Services.CreateScope())
 
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    await SeedDataAsync(roleManager, userManager);
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    await SeedDataAsync(roleManager, userManager, config);
 }
 
 // Configure the HTTP request pipeline.
@@ -90,7 +94,7 @@ app.MapRazorComponents<App>()
 
 app.Run();
 
-static async Task SeedDataAsync(RoleManager<IdentityRole> roleManager, UserManager<ApplicationUser> userManager)
+static async Task SeedDataAsync(RoleManager<IdentityRole> roleManager, UserManager<ApplicationUser> userManager, IConfiguration config)
 {
     // Create roles
     string[] roles = ["Admin", "User"];
@@ -100,9 +104,18 @@ static async Task SeedDataAsync(RoleManager<IdentityRole> roleManager, UserManag
             await roleManager.CreateAsync(new IdentityRole(role));
     }
 
-    // Create default admin user
-    const string adminEmail = "admin@example.com";
-    const string adminPassword = "Admin123";
+    // Create default admin user from configuration
+    // NOTE: Override SeedAdmin:Email and SeedAdmin:Password via environment variables or secrets in production
+    var adminEmail = config["SeedAdmin:Email"];
+    var adminPassword = config["SeedAdmin:Password"];
+
+    if (string.IsNullOrWhiteSpace(adminEmail) || string.IsNullOrWhiteSpace(adminPassword))
+    {
+        var logger = userManager.Logger;
+        logger.LogWarning("SeedAdmin:Email and SeedAdmin:Password are not configured. Skipping default admin user creation.");
+        return;
+    }
+
     if (await userManager.FindByEmailAsync(adminEmail) == null)
     {
         var admin = new ApplicationUser
