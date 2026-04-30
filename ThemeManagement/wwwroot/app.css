@@ -253,7 +253,7 @@ a, .btn-link {
         padding: 8px !important;
     }
 
-    /* MudPaper の影をなくす */
+    /* MudPaper の影を非表示にする */
     .mud-paper {
         box-shadow: none !important;
         border: 1px solid #ccc !important;
