@@ -43,6 +43,8 @@
             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
             <MudIconButton Icon="@Icons.Material.Filled.BarChart" Size="Size.Small" Color="Color.Info"
                            Href="@($"/themes/{context.Id}/allocation")" />
+            <MudIconButton Icon="@Icons.Material.Filled.Psychology" Size="Size.Small" Color="Color.Secondary"
+                           OnClick="() => OpenRequiredSkillsDialog(context)" />
         </MudTd>
     </RowTemplate>
     <NoRecordsContent><MudText>テーマが登録されていません</MudText></NoRecordsContent>
@@ -91,6 +93,17 @@
         var dialog = await DialogService.ShowAsync<ThemeEditDialog>("テーマ編集", parameters);
         var result = await dialog.Result;
         if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenRequiredSkillsDialog(Theme theme)
+    {
+        var parameters = new DialogParameters<ThemeRequiredSkillsDialog>
+        {
+            { x => x.ThemeId, theme.Id },
+            { x => x.ThemeName, theme.Name }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<ThemeRequiredSkillsDialog>($"必要スキル管理 - {theme.Name}", parameters, options);
     }
 
     private static Color StatusColor(string status) => status switch

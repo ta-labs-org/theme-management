@@ -1,0 +1,173 @@
+@inject ISkillService SkillService
+@inject ISnackbar Snackbar
+@inject ILogger<ThemeRequiredSkillsDialog> Logger
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="4">
+            <MudText Typo="Typo.subtitle1"><strong>@ThemeName</strong> の必要スキル</MudText>
+
+            @if (_requiredSkills.Any())
+            {
+                <MudTable Items="_requiredSkills" Dense="true" Hover="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>スキル名</MudTh>
+                        <MudTh>カテゴリ</MudTh>
+                        <MudTh>必要レベル</MudTh>
+                        <MudTh>マッチ数</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Skill.Name</MudTd>
+                        <MudTd>@(context.Skill.Category ?? "—")</MudTd>
+                        <MudTd>
+                            <MudRating SelectedValue="context.RequiredLevel"
+                                       SelectedValueChanged="async v => await UpdateLevelAsync(context, v)"
+                                       MaxValue="5" />
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(GetMatchCount(context.SkillId, context.RequiredLevel) > 0 ? Color.Success : Color.Default)">
+                                @GetMatchCount(context.SkillId, context.RequiredLevel) 人
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                           OnClick="() => DeleteAsync(context)" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">必要スキルが登録されていません</MudText>
+            }
+
+            <MudDivider />
+
+            <MudText Typo="Typo.subtitle2">必要スキルを追加</MudText>
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                <MudSelect T="int" @bind-Value="_newSkillId" Label="スキル" Style="min-width:220px;">
+                    @foreach (var s in _availableSkills)
+                    {
+                        <MudSelectItem T="int" Value="@s.Id">@s.Name @(s.Category != null ? $"（{s.Category}）" : "")</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="int" @bind-Value="_newLevel" Label="必要レベル" Style="min-width:110px;">
+                    @for (int i = 1; i <= 5; i++)
+                    {
+                        var level = i;
+                        <MudSelectItem T="int" Value="@level">@level</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddSkillAsync"
+                           Disabled="@(_availableSkills.Count == 0)">追加</MudButton>
+            </MudStack>
+
+            @if (_matchingEngineers.Any())
+            {
+                <MudDivider />
+                <MudText Typo="Typo.subtitle2">マッチするエンジニア</MudText>
+                <MudChipSet T="string">
+                    @foreach (var name in _matchingEngineers.Distinct())
+                    {
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small">@name</MudChip>
+                    }
+                </MudChipSet>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">閉じる</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ThemeId { get; set; }
+    [Parameter] public string ThemeName { get; set; } = string.Empty;
+
+    private List<ThemeRequiredSkill> _requiredSkills = [];
+    private List<Skill> _allSkills = [];
+    private List<Skill> _availableSkills = [];
+    private List<EngineerSkill> _matchingEngineerSkills = [];
+    private List<string> _matchingEngineers = [];
+    private int _newSkillId;
+    private int _newLevel = 3;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allSkills = await SkillService.GetAllAsync();
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _requiredSkills = await SkillService.GetThemeRequiredSkillsAsync(ThemeId);
+        _matchingEngineerSkills = await SkillService.GetMatchingEngineersForThemeAsync(ThemeId);
+        _matchingEngineers = _matchingEngineerSkills
+            .Select(es => es.Engineer.Name)
+            .Distinct()
+            .OrderBy(n => n)
+            .ToList();
+        var assignedIds = _requiredSkills.Select(ts => ts.SkillId).ToHashSet();
+        _availableSkills = _allSkills.Where(s => !assignedIds.Contains(s.Id)).ToList();
+        _newSkillId = _availableSkills.FirstOrDefault()?.Id ?? 0;
+    }
+
+    private int GetMatchCount(int skillId, int requiredLevel) =>
+        _matchingEngineerSkills.Count(es => es.SkillId == skillId && es.Level >= requiredLevel);
+
+    private async Task AddSkillAsync()
+    {
+        if (_newSkillId == 0)
+        {
+            Snackbar.Add("スキルを選択してください", Severity.Warning);
+            return;
+        }
+        try
+        {
+            await SkillService.SaveThemeRequiredSkillAsync(new ThemeRequiredSkill
+            {
+                ThemeId = ThemeId,
+                SkillId = _newSkillId,
+                RequiredLevel = _newLevel
+            });
+            await RefreshAsync();
+            Snackbar.Add("追加しました", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "必要スキル追加中にエラーが発生しました");
+            Snackbar.Add("追加中にエラーが発生しました", Severity.Error);
+        }
+    }
+
+    private async Task UpdateLevelAsync(ThemeRequiredSkill ts, int newLevel)
+    {
+        try
+        {
+            await SkillService.SaveThemeRequiredSkillAsync(new ThemeRequiredSkill
+            {
+                ThemeId = ts.ThemeId,
+                SkillId = ts.SkillId,
+                RequiredLevel = newLevel
+            });
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "必要スキルレベル更新中にエラーが発生しました");
+            Snackbar.Add("更新中にエラーが発生しました", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(ThemeRequiredSkill ts)
+    {
+        await SkillService.DeleteThemeRequiredSkillAsync(ts.Id);
+        await RefreshAsync();
+        Snackbar.Add("削除しました", Severity.Success);
+    }
+
+    private void Close() => MudDialog.Close(DialogResult.Ok(true));
+}

@@ -34,6 +34,8 @@
             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
             <MudIconButton Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" Color="Color.Info"
                            Href="@($"/engineers/{context.Id}/allocation")" />
+            <MudIconButton Icon="@Icons.Material.Filled.Psychology" Size="Size.Small" Color="Color.Secondary"
+                           OnClick="() => OpenSkillsDialog(context)" />
             @if (context.IsActive)
             {
                 <MudIconButton Icon="@Icons.Material.Filled.PersonOff" Size="Size.Small" Color="Color.Warning"
@@ -77,6 +79,17 @@
         var dialog = await DialogService.ShowAsync<EngineerEditDialog>("エンジニア編集", parameters);
         var result = await dialog.Result;
         if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenSkillsDialog(Engineer engineer)
+    {
+        var parameters = new DialogParameters<EngineerSkillsDialog>
+        {
+            { x => x.EngineerId, engineer.Id },
+            { x => x.EngineerName, engineer.Name }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<EngineerSkillsDialog>($"スキル管理 - {engineer.Name}", parameters, options);
     }
 
     private async Task DeactivateAsync(Engineer engineer)

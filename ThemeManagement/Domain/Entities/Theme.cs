@@ -15,4 +15,5 @@ public class Theme
     public DateTime UpdatedAt { get; set; }
 
     public ICollection<EngineerThemeAllocation> EngineerAllocations { get; set; } = new List<EngineerThemeAllocation>();
+    public ICollection<ThemeRequiredSkill> RequiredSkills { get; set; } = new List<ThemeRequiredSkill>();
 }
