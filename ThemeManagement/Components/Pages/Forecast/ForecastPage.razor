@@ -191,7 +191,7 @@
                                 <td>@FormatHours(GetThemeTotal(theme.Id))</td>
                             </tr>
                             <!-- テーマコスト試算行 -->
-                            var periodCost2 = GetThemePeriodCost(theme.Id);
+                            var periodCost2 = GetThemePeriodCost(theme.Id, theme.OrderType);
                             var carryOver2 = GetCarryOver(theme.Id);
                             var totalCost2 = periodCost2 + carryOver2;
                             var isOverBudget2 = theme.OrderAmount > 0 && totalCost2 > theme.OrderAmount;
@@ -423,9 +423,10 @@
         return new DateOnly(year, month, 1) > new DateOnly(deadline.Year, deadline.Month, 1);
     }
 
-    /// <summary>期間内のテーマ試算コスト（エンジニア売上単価ベース）</summary>
-    private decimal GetThemePeriodCost(int themeId)
+    /// <summary>期間内のテーマ試算コスト（社用開発は原価、それ以外は売価）</summary>
+    private decimal GetThemePeriodCost(int themeId, string orderType)
     {
+        bool useCost = orderType == "社用開発";
         decimal cost = 0;
         foreach (var eng in _engineers)
         {
@@ -433,7 +434,7 @@
             {
                 var hours = GetAlloc(eng.Id, themeId, y, m);
                 if (hours <= 0) continue;
-                var unitPrice = eng.Grade?.UnitSalePrice ?? 0; // 時間単価（円/時間）
+                var unitPrice = useCost ? (eng.Grade?.UnitCostPrice ?? 0) : (eng.Grade?.UnitSalePrice ?? 0);
                 cost += hours * unitPrice;
             }
         }

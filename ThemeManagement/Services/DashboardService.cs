@@ -83,7 +83,8 @@ public class DashboardService : IDashboardService
         foreach (var theme in themes)
         {
             var themeAllocs = allAllocations.Where(a => a.ThemeId == theme.Id).ToList();
-            var allocCost = themeAllocs.Sum(a => a.AllocatedHours * a.Engineer.Grade.UnitSalePrice);
+            bool useCost = theme.OrderType == "社用開発";
+            var allocCost = themeAllocs.Sum(a => a.AllocatedHours * (useCost ? a.Engineer.Grade.UnitCostPrice : a.Engineer.Grade.UnitSalePrice));
             var carryOver = carryOverMap.GetValueOrDefault(theme.Id, 0m);
             var totalCost = allocCost + carryOver;
             var progressRate = theme.OrderAmount > 0 ? totalCost / theme.OrderAmount * 100 : 0m;

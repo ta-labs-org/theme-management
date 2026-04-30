@@ -9,6 +9,8 @@
             <MudSelect T="string" @bind-Value="Theme.OrderType" Label="受注区分" Required="true">
                 <MudSelectItem T="string" Value="@("見積")">見積</MudSelectItem>
                 <MudSelectItem T="string" Value="@("機動的開発")">機動的開発</MudSelectItem>
+                <MudSelectItem T="string" Value="@("社用開発")">社用開発</MudSelectItem>
+                <MudSelectItem T="string" Value="@("その他")">その他</MudSelectItem>
             </MudSelect>
             <MudDatePicker Label="受注日" Date="_orderDate" DateChanged="d => { _orderDate = d; if (d.HasValue) Theme.OrderDate = DateOnly.FromDateTime(d.Value); }"
                            Required="true" DateFormat="yyyy/MM/dd" />

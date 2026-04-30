@@ -20,11 +20,14 @@
                 ※ テーマNoが既存のものと一致した場合は上書き更新します
             </MudAlert>
 
-            <MudFileUpload T="IBrowserFile" @ref="_fileUpload" FilesChanged="OnFileSelected" Accept=".csv" MaximumFileCount="1" />
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FolderOpen"
-                       Color="Color.Primary" OnClick="@(() => _fileUpload!.OpenFilePickerAsync())">
-                CSVファイルを選択
-            </MudButton>
+            <MudFileUpload T="IBrowserFile" @ref="_fileUpload" FilesChanged="OnFileSelected" Accept=".csv" MaximumFileCount="1">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.FolderOpen"
+                               Color="Color.Primary" FullWidth="true">
+                        CSVファイルを選択
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
 
             @if (_fileName != null)
             {
@@ -122,9 +125,9 @@
             using var reader = new StreamReader(stream, Encoding.UTF8);
 
             int lineNo = 0;
-            while (!reader.EndOfStream)
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null)
             {
-                var line = await reader.ReadLineAsync();
                 lineNo++;
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 if (lineNo == 1) continue; // ヘッダー行スキップ
