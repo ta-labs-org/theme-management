@@ -233,6 +233,54 @@ a, .btn-link {
     color: #006bb7;
 }
 
+/* ===== 印刷・PDF出力 ===== */
+@media print {
+    /* ナビゲーション・コントロールを非表示 */
+    .mud-drawer,
+    .mud-appbar,
+    .no-print {
+        display: none !important;
+    }
+
+    /* メインコンテンツを全幅に拡張 */
+    .mud-main-content {
+        margin-left: 0 !important;
+        padding: 0 !important;
+    }
+
+    .mud-container {
+        max-width: 100% !important;
+        padding: 8px !important;
+    }
+
+    /* MudPaper の影をなくす */
+    .mud-paper {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+    }
+
+    /* テーブルのページまたぎ制御 */
+    .forecast-table {
+        page-break-inside: auto;
+        font-size: 8pt !important;
+    }
+
+    .forecast-table tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+    }
+
+    /* 予測コンテナを縦に積む（横並び → 縦並び） */
+    .forecast-container {
+        flex-direction: column !important;
+    }
+
+    .forecast-panel {
+        min-width: 100% !important;
+    }
+}
+
+
 /* ===== 稼働日管理 複数月テーブル ===== */
 .workday-table-wrapper {
     overflow-x: auto;

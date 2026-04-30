@@ -1,16 +1,23 @@
 ﻿@page "/"
 @rendermode InteractiveServer
 @inject IDashboardService DashboardService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>ダッシュボード</PageTitle>
 
 <MudText Typo="Typo.h5" Class="mb-4">ダッシュボード</MudText>
 
-<MudPaper Class="pa-4 mb-4" Elevation="1">
+<MudPaper Class="pa-4 mb-4 no-print" Elevation="1">
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
         <MudNumericField T="int" @bind-Value="_year" Label="年" Min="2020" Max="2100" Style="width:100px" />
         <MudNumericField T="int" @bind-Value="_month" Label="月" Min="1" Max="12" Style="width:80px" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadData">更新</MudButton>
+        <MudDivider Vertical="true" FlexItem="true" />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print"
+                   OnClick="PrintPage">印刷</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                   Href="@($"/api/report/pdf?type=dashboard&year={_year}&month={_month}")"
+                   Target="_blank">PDF出力</MudButton>
     </MudStack>
 </MudPaper>
 
@@ -121,4 +128,6 @@
         _engineerSummaries = await DashboardService.GetEngineerSummaryAsync(_year, _month);
         _themeProgress = await DashboardService.GetThemeProgressAsync();
     }
+
+    private async Task PrintPage() => await JSRuntime.InvokeVoidAsync("printPage");
 }
