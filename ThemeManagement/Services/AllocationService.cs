@@ -17,6 +17,7 @@ public interface IAllocationService
     Task UpsertAllocationAsync(int engineerId, int themeId, int year, int month, decimal hours);
     Task UpsertAllocationNoValidationAsync(int engineerId, int themeId, int year, int month, decimal hours);
     Task DeleteAllocationAsync(int id);
+    Task<(int added, int updated)> BulkImportAllocationsAsync(IEnumerable<AllocationImportData> rows);
 }
 
 public class AllocationService : IAllocationService
@@ -186,5 +187,37 @@ public class AllocationService : IAllocationService
             existing.AllocatedHours = hours;
         }
         await _db.SaveChangesAsync();
+    }
+
+    public async Task<(int added, int updated)> BulkImportAllocationsAsync(IEnumerable<AllocationImportData> rows)
+    {
+        int added = 0, updated = 0;
+
+        foreach (var row in rows)
+        {
+            var existing = await _db.EngineerThemeAllocations
+                .FirstOrDefaultAsync(a => a.EngineerId == row.EngineerId && a.ThemeId == row.ThemeId
+                                          && a.Year == row.Year && a.Month == row.Month);
+            if (existing == null)
+            {
+                _db.EngineerThemeAllocations.Add(new EngineerThemeAllocation
+                {
+                    EngineerId = row.EngineerId,
+                    ThemeId = row.ThemeId,
+                    Year = row.Year,
+                    Month = row.Month,
+                    AllocatedHours = row.Hours
+                });
+                added++;
+            }
+            else
+            {
+                existing.AllocatedHours = row.Hours;
+                updated++;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return (added, updated);
     }
 }
