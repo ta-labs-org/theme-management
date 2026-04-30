@@ -1,5 +1,6 @@
 @inject IThemeService ThemeService
 @inject ISnackbar Snackbar
+@inject ILogger<ThemeEditDialog> Logger
 
 <MudDialog>
     <DialogContent>
@@ -62,9 +63,17 @@
             Snackbar.Add("受注金額は0より大きい値を入力してください", Severity.Warning);
             return;
         }
-        await ThemeService.SaveAsync(Theme);
-        Snackbar.Add("保存しました", Severity.Success);
-        MudDialog.Close(DialogResult.Ok(true));
+        try
+        {
+            await ThemeService.SaveAsync(Theme);
+            Snackbar.Add("保存しました", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "テーマの保存中にエラーが発生しました");
+            Snackbar.Add("保存中にエラーが発生しました", Severity.Error);
+        }
     }
 
     private void Cancel() => MudDialog.Cancel();

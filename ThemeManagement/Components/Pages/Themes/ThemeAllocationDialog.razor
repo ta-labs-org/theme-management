@@ -1,5 +1,6 @@
 @inject IAllocationService AllocationService
 @inject ISnackbar Snackbar
+@inject ILogger<ThemeAllocationDialog> Logger
 
 <MudDialog>
     <DialogContent>
@@ -63,6 +64,11 @@
         catch (BusinessRuleException ex)
         {
             Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "割り当ての保存中にエラーが発生しました (EngineerId={EngineerId}, ThemeId={ThemeId})", engineerId, ThemeId);
+            Snackbar.Add("保存中にエラーが発生しました", Severity.Error);
         }
     }
 

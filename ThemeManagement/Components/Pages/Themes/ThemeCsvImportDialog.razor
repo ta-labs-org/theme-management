@@ -4,6 +4,7 @@
 @using ThemeManagement.Services
 @inject IThemeService ThemeService
 @inject ISnackbar Snackbar
+@inject ILogger<ThemeCsvImportDialog> Logger
 
 <MudDialog Style="min-width:860px">
     <TitleContent>
@@ -147,6 +148,7 @@
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "CSVファイルの読み込み中にエラーが発生しました");
             _errorRows.Add(new ErrorRow(0, $"ファイル読み込みエラー: {ex.Message}"));
         }
 
@@ -271,6 +273,7 @@
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "CSVインポート中にエラーが発生しました");
             Snackbar.Add($"インポートエラー: {ex.Message}", Severity.Error);
         }
         finally

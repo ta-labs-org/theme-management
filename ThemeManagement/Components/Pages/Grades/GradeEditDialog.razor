@@ -1,5 +1,6 @@
 @inject IGradeService GradeService
 @inject ISnackbar Snackbar
+@inject ILogger<GradeEditDialog> Logger
 
 <MudDialog>
     <DialogContent>
@@ -26,9 +27,17 @@
             Snackbar.Add("等級名を入力してください", Severity.Warning);
             return;
         }
-        await GradeService.SaveAsync(Grade);
-        Snackbar.Add("保存しました", Severity.Success);
-        MudDialog.Close(DialogResult.Ok(true));
+        try
+        {
+            await GradeService.SaveAsync(Grade);
+            Snackbar.Add("保存しました", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "等級の保存中にエラーが発生しました");
+            Snackbar.Add("保存中にエラーが発生しました", Severity.Error);
+        }
     }
 
     private void Cancel() => MudDialog.Cancel();

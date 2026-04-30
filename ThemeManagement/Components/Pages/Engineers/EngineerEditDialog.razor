@@ -1,5 +1,6 @@
 @inject IEngineerService EngineerService
 @inject ISnackbar Snackbar
+@inject ILogger<EngineerEditDialog> Logger
 
 <MudDialog>
     <DialogContent>
@@ -36,9 +37,17 @@
             Snackbar.Add("等級を選択してください", Severity.Warning);
             return;
         }
-        await EngineerService.SaveAsync(Engineer);
-        Snackbar.Add("保存しました", Severity.Success);
-        MudDialog.Close(DialogResult.Ok(true));
+        try
+        {
+            await EngineerService.SaveAsync(Engineer);
+            Snackbar.Add("保存しました", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "エンジニアの保存中にエラーが発生しました");
+            Snackbar.Add("保存中にエラーが発生しました", Severity.Error);
+        }
     }
 
     private void Cancel() => MudDialog.Cancel();
