@@ -1,0 +1,29 @@
+@page "/settings"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+
+<PageTitle>設定・管理</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">設定・管理</MudText>
+
+<MudGrid>
+    <MudItem xs="12" sm="6" md="4">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudStack Spacing="2">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Backup" Color="Color.Primary" />
+                    <MudText Typo="Typo.h6">DBバックアップ</MudText>
+                </MudStack>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    現在のデータベースをSQLiteファイルとしてダウンロードします。<br />
+                    定期的なバックアップを推奨します。
+                </MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Download"
+                           Href="/api/backup/download" Target="_blank">
+                    バックアップをダウンロード
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
