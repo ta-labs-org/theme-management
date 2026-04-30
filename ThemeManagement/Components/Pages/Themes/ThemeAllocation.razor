@@ -143,13 +143,24 @@ else
             try
             {
                 await AllocationService.DeleteAllocationAsync(row.Id);
-                Snackbar.Add("削除しました", Severity.Success);
-                await LoadAllocations();
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "割り当ての削除中にエラーが発生しました (Id={AllocationId})", row.Id);
                 Snackbar.Add("削除中にエラーが発生しました", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("削除しました", Severity.Success);
+
+            try
+            {
+                await LoadAllocations();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "割り当ての削除後の再読込中にエラーが発生しました (Id={AllocationId})", row.Id);
+                Snackbar.Add("削除は完了しましたが、一覧の再読込に失敗しました", Severity.Warning);
             }
         }
     }
