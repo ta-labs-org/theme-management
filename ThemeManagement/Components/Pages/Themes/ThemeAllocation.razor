@@ -6,6 +6,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager Nav
+@inject ILogger<ThemeAllocation> Logger
 
 <PageTitle>テーマ稼働管理</PageTitle>
 
@@ -139,9 +140,17 @@ else
         var confirmed = await ConfirmAsync("削除確認", $"{row.EngineerName} の割り当てを削除しますか？", "削除");
         if (confirmed)
         {
-            await AllocationService.DeleteAllocationAsync(row.Id);
-            Snackbar.Add("削除しました", Severity.Success);
-            await LoadAllocations();
+            try
+            {
+                await AllocationService.DeleteAllocationAsync(row.Id);
+                Snackbar.Add("削除しました", Severity.Success);
+                await LoadAllocations();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "割り当ての削除中にエラーが発生しました (Id={AllocationId})", row.Id);
+                Snackbar.Add("削除中にエラーが発生しました", Severity.Error);
+            }
         }
     }
 

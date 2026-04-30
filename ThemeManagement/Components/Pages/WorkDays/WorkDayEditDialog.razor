@@ -1,6 +1,7 @@
 @inject IWorkDayService WorkDayService
 @inject ICapacitySettings CapacitySettings
 @inject ISnackbar Snackbar
+@inject ILogger<WorkDayEditDialog> Logger
 
 <MudDialog>
     <DialogContent>
@@ -22,9 +23,17 @@
 
     private async Task Submit()
     {
-        await WorkDayService.SaveAsync(WorkDays);
-        Snackbar.Add("保存しました", Severity.Success);
-        MudDialog.Close(DialogResult.Ok(true));
+        try
+        {
+            await WorkDayService.SaveAsync(WorkDays);
+            Snackbar.Add("保存しました", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "稼働日数の保存中にエラーが発生しました");
+            Snackbar.Add("保存中にエラーが発生しました", Severity.Error);
+        }
     }
 
     private void Cancel() => MudDialog.Cancel();
