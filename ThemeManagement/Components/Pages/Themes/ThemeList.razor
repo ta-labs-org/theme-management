@@ -3,6 +3,7 @@
 @inject IThemeService ThemeService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject IJSRuntime JS
 
 <PageTitle>テーマ・案件一覧</PageTitle>
 
@@ -13,6 +14,8 @@
                OnClick="OpenAddDialog">新規登録</MudButton>
     <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.UploadFile"
                OnClick="OpenCsvImportDialog">CSVインポート</MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.FileDownload"
+               OnClick="ExportCsvAsync">CSVエクスポート</MudButton>
     <MudCheckBox T="bool" Value="_showAll" ValueChanged="@(async v => { _showAll = v; await LoadAsync(); })" Label="完了・中止も表示" />
 </MudStack>
 
@@ -108,4 +111,16 @@
         "Cancelled" => "中止",
         _ => status
     };
+
+    private async Task ExportCsvAsync()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("テーマNo,テーマ名,受注区分,受注日,完了予定日,受注金額,状態");
+        foreach (var t in _themes)
+        {
+            sb.AppendLine($"\"{t.ThemeNo}\",\"{t.Name}\",\"{t.OrderType}\",{t.OrderDate:yyyy/MM/dd},{t.EstimatedCompletionDate:yyyy/MM/dd},{t.OrderAmount},{StatusLabel(t.Status)}");
+        }
+        var filename = $"themes_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        await JS.InvokeVoidAsync("downloadCsv", filename, sb.ToString());
+    }
 }
