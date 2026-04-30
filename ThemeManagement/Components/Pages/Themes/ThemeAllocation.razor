@@ -40,6 +40,8 @@ else
 
     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                OnClick="OpenAddDialog" Class="mb-3">エンジニア追加</MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.ContentCopy"
+               OnClick="CopyFromPrevMonthAsync" Class="mb-3 ml-2">前月割当をコピー</MudButton>
 
     <MudTable Items="_allocations" Dense="true" Hover="true" Elevation="2">
         <HeaderContent>
@@ -166,6 +168,25 @@ else
     }
 
     private void GoBack() => Nav.NavigateTo("/themes");
+
+    private async Task CopyFromPrevMonthAsync()
+    {
+        var prevDate = new DateTime(_year, _month, 1).AddMonths(-1);
+        var confirmed = await ConfirmAsync(
+            "前月割当コピー",
+            $"{prevDate.Year}/{prevDate.Month:D2} の割り当てを {_year}/{_month:D2} にコピーしますか？（既存データは上書きされます）",
+            "コピー実行");
+        if (!confirmed) return;
+
+        var count = await AllocationService.CopyFromPreviousMonthAsync(ThemeId, _year, _month);
+        if (count == 0)
+            Snackbar.Add($"{prevDate.Year}/{prevDate.Month:D2} の割り当てデータがありません", Severity.Warning);
+        else
+        {
+            Snackbar.Add($"{count} 件の割り当てをコピーしました", Severity.Success);
+            await LoadAllocations();
+        }
+    }
 
     private async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK")
     {
