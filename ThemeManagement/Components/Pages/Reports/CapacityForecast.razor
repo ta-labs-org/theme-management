@@ -1,0 +1,182 @@
+@page "/report/capacity"
+@rendermode InteractiveServer
+@using ThemeManagement.Data
+@using ThemeManagement.Domain.Entities
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext Db
+@inject ICapacitySettings CapacitySettings
+
+<PageTitle>キャパシティ予測</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">キャパシティ予測グラフ</MudText>
+
+<MudPaper Class="pa-3 mb-4" Elevation="1">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+        <MudNumericField T="int" @bind-Value="_startYear" Label="開始年" Min="2020" Max="2099" Style="width:100px" />
+        <MudNumericField T="int" @bind-Value="_startMonth" Label="開始月" Min="1" Max="12" Style="width:80px" />
+        <MudNumericField T="int" @bind-Value="_months" Label="表示月数" Min="1" Max="12" Style="width:100px" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="LoadDataAsync">更新</MudButton>
+    </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+else
+{
+    <!-- 折れ線グラフ：エンジニアごとの予定工数 -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">エンジニア別 月別割当工数 (h)</MudText>
+        <MudChart ChartType="ChartType.Line"
+                  ChartSeries="@_series"
+                  XAxisLabels="@_labels"
+                  Width="100%" Height="350px" />
+    </MudPaper>
+
+    <!-- 棒グラフ：チーム合計 稼働上限 vs 割当済み -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">チーム合計 稼働上限 vs 割当済み (h)</MudText>
+        <MudChart ChartType="ChartType.Bar"
+                  ChartSeries="@_teamSeries"
+                  XAxisLabels="@_labels"
+                  Width="100%" Height="280px" />
+    </MudPaper>
+
+    <!-- テーブル -->
+    <MudTable Items="_tableRows" Dense="true" Hover="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>エンジニア</MudTh>
+            @foreach (var label in _labels)
+            {
+                <MudTh Style="text-align:right;min-width:70px">@label</MudTh>
+            }
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.EngineerName</MudTd>
+            @foreach (var h in context.Hours)
+            {
+                <MudTd Style="text-align:right">
+                    <MudText Color="@(h.IsOver ? Color.Error : h.IsEmpty ? Color.Default : Color.Default)"
+                             Style="@(h.IsOver ? "font-weight:700" : "")">
+                        @(h.Allocated > 0 ? h.Allocated.ToString("F1") : "—")
+                        @if (h.IsOver) { <text> ⚠</text> }
+                    </MudText>
+                </MudTd>
+            }
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private int _startYear = DateTime.Now.Year;
+    private int _startMonth = DateTime.Now.Month;
+    private int _months = 6;
+    private bool _loading = false;
+
+    private List<ChartSeries<double>> _series = [];
+    private List<ChartSeries<double>> _teamSeries = [];
+    private string[] _labels = [];
+    private List<EngineerCapacityRow> _tableRows = [];
+
+    protected override async Task OnInitializedAsync() => await LoadDataAsync();
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            // 対象月リスト
+            var periods = Enumerable.Range(0, _months)
+                .Select(i => new DateTime(_startYear, _startMonth, 1).AddMonths(i))
+                .Select(d => (d.Year, d.Month))
+                .ToList();
+
+            _labels = periods.Select(p => $"{p.Year}/{p.Month:D2}").ToArray();
+
+            var engineers = await Db.Engineers.AsNoTracking()
+                .Include(e => e.Grade)
+                .Where(e => e.IsActive)
+                .OrderBy(e => e.Name)
+                .ToListAsync();
+
+            var engineerIds = engineers.Select(e => e.Id).ToList();
+
+            var allAllocations = await Db.EngineerThemeAllocations.AsNoTracking()
+                .Where(a => engineerIds.Contains(a.EngineerId)
+                         && periods.Select(p => p.Year).Contains(a.Year)
+                         && periods.Select(p => p.Month).Contains(a.Month))
+                .ToListAsync();
+
+            var allWorkDays = await Db.MonthlyWorkDays.AsNoTracking()
+                .Where(w => periods.Select(p => p.Year).Contains(w.Year)
+                         && periods.Select(p => p.Month).Contains(w.Month))
+                .ToListAsync();
+
+            var allAdjustments = await Db.EngineerMonthlyAdjustments.AsNoTracking()
+                .Where(a => engineerIds.Contains(a.EngineerId)
+                         && periods.Select(p => p.Year).Contains(a.Year)
+                         && periods.Select(p => p.Month).Contains(a.Month))
+                .ToListAsync();
+
+            // エンジニア別折れ線グラフデータ
+            _series = engineers.Select(e =>
+            {
+                var data = periods.Select(p =>
+                    (double)allAllocations
+                        .Where(a => a.EngineerId == e.Id && a.Year == p.Year && a.Month == p.Month)
+                        .Sum(a => a.AllocatedHours)
+                ).ToArray();
+                return new ChartSeries<double> { Name = e.Name, Data = data };
+            }).ToList();
+
+            // チーム合計
+            var teamMax = periods.Select(p =>
+            {
+                double total = 0;
+                foreach (var e in engineers)
+                {
+                    var adj = allAdjustments.FirstOrDefault(a => a.EngineerId == e.Id && a.Year == p.Year && a.Month == p.Month);
+                    int wd = adj?.WorkDays ?? allWorkDays.FirstOrDefault(w => w.Year == p.Year && w.Month == p.Month)?.WorkDays ?? 0;
+                    total += (double)(wd * 8m * CapacitySettings.Coefficient);
+                }
+                return total;
+            }).ToArray();
+
+            var teamAllocated = periods.Select(p =>
+                (double)allAllocations.Where(a => a.Year == p.Year && a.Month == p.Month).Sum(a => a.AllocatedHours)
+            ).ToArray();
+
+            _teamSeries =
+            [
+                new ChartSeries<double> { Name = "稼働上限", Data = teamMax },
+                new ChartSeries<double> { Name = "割当済み", Data = teamAllocated },
+            ];
+
+            // テーブル
+            _tableRows = engineers.Select(e =>
+            {
+                var hours = periods.Select(p =>
+                {
+                    var adj = allAdjustments.FirstOrDefault(a => a.EngineerId == e.Id && a.Year == p.Year && a.Month == p.Month);
+                    int wd = adj?.WorkDays ?? allWorkDays.FirstOrDefault(w => w.Year == p.Year && w.Month == p.Month)?.WorkDays ?? 0;
+                    var max = wd * 8m * CapacitySettings.Coefficient;
+                    var allocated = allAllocations
+                        .Where(a => a.EngineerId == e.Id && a.Year == p.Year && a.Month == p.Month)
+                        .Sum(a => a.AllocatedHours);
+                    return new HourCell(allocated, allocated > max && max > 0, allocated == 0);
+                }).ToList();
+                return new EngineerCapacityRow(e.Name, hours);
+            }).ToList();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private record HourCell(decimal Allocated, bool IsOver, bool IsEmpty);
+    private record EngineerCapacityRow(string EngineerName, List<HourCell> Hours);
+}
