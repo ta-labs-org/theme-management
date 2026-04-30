@@ -1,5 +1,12 @@
 namespace ThemeManagement.Models;
 
+public record DashboardKpiDto(
+    int ActiveEngineerCount,
+    int ActiveThemeCount,
+    decimal AverageWorkRate,
+    decimal TotalMonthlyCost
+);
+
 public record AllocationRowDto(
     int Id,
     int EngineerId,
