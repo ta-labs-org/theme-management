@@ -1,12 +1,15 @@
 @page "/forecast"
 @using ThemeManagement.Domain.Entities
 @using ThemeManagement.Services
+@using ThemeManagement.Data
+@using Microsoft.EntityFrameworkCore
 @inject IAllocationService AllocationService
 @inject IEngineerService EngineerService
 @inject IThemeService ThemeService
 @inject ISnackbar Snackbar
 @inject IWorkDayService WorkDayService
 @inject ICapacitySettings CapacitySettings
+@inject AppDbContext Db
 
 <PageTitle>半期見込計算</PageTitle>
 
@@ -86,10 +89,14 @@
                                 <td colspan="2">小計</td>
                                 @foreach (var (y, m) in _periodMonths)
                                 {
-                                    var isOver = IsOverCapacity(eng.Id, y, m);
-                                    <td class="@(isOver ? "cell-over-capacity" : "")">
-                                        @FormatHours(GetEngineerMonthTotal(eng.Id, y, m))
+                                    var total = GetEngineerMonthTotal(eng.Id, y, m);
+                                    var cap = GetCapacity(eng.Id, y, m);
+                                    var isOver = cap > 0 && total > cap;
+                                    var isUnder = !isOver && cap > 0 && total < cap * 0.9m;
+                                    <td class="@(isOver ? "cell-over-capacity" : isUnder ? "cell-under-capacity" : "")">
+                                        @FormatHours(total)
                                         @if (isOver) { <span title="稼働上限超過">⚠</span> }
+                                        @if (isUnder) { <span title="稼働上限の90%未満（少なすぎ）">↓</span> }
                                     </td>
                                 }
                                 <td>@FormatHours(GetEngineerTotal(eng.Id))</td>
@@ -146,7 +153,7 @@
                                         <td rowspan="@themeEngineers.Count" class="cell-group-name">
                                             <div>@theme.Name</div>
                                             <div class="theme-meta">
-                                                <span>¥@(theme.OrderAmount.ToString("N0"))</span><br />
+                                                <span class="amount">¥@(theme.OrderAmount.ToString("N0"))</span><br />
                                                 <span>〆@(theme.EstimatedCompletionDate.ToString("yyyy/M"))</span>
                                             </div>
                                         </td>
@@ -165,9 +172,18 @@
                                     <td class="cell-total">@FormatHours(GetRowTotal(engId, themeId))</td>
                                 </tr>
                             }
+                            <!-- 前期繰越行 -->
+                            <tr class="row-carryover">
+                                <td colspan="2">前期繰越（金額）</td>
+                                <td colspan="@(_periodMonths.Count + 1)" class="cell-carryover-wide">
+                                    <input type="text" class="carryover-input"
+                                           value="@(GetCarryOver(theme.Id) == 0 ? "" : ((long)GetCarryOver(theme.Id)).ToString("N0"))"
+                                           @onchange="@(async e => await OnCarryOverChanged(theme.Id, e.Value?.ToString()))" />
+                                </td>
+                            </tr>
                             <!-- テーマ小計行 -->
                             <tr class="row-subtotal">
-                                <td colspan="2">小計</td>
+                                <td colspan="2">小計（工数）</td>
                                 @foreach (var (y, m) in _periodMonths)
                                 {
                                     <td>@FormatHours(GetThemeMonthTotal(theme.Id, y, m))</td>
@@ -175,16 +191,20 @@
                                 <td>@FormatHours(GetThemeTotal(theme.Id))</td>
                             </tr>
                             <!-- テーマコスト試算行 -->
-                            <tr class="@(theme.OrderAmount > 0 && GetThemePeriodCost(theme.Id) > theme.OrderAmount ? "row-over-budget" : "row-theme-cost")">
+                            var periodCost2 = GetThemePeriodCost(theme.Id);
+                            var carryOver2 = GetCarryOver(theme.Id);
+                            var totalCost2 = periodCost2 + carryOver2;
+                            var isOverBudget2 = theme.OrderAmount > 0 && totalCost2 > theme.OrderAmount;
+                            <tr class="@(isOverBudget2 ? "row-over-budget" : "row-theme-cost")">
                                 <td colspan="@(2 + _periodMonths.Count + 1)">
-                                    @if (theme.OrderAmount > 0 && GetThemePeriodCost(theme.Id) > theme.OrderAmount)
+                                    @if (isOverBudget2)
                                     {
                                         <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="mr-1" />
-                                        <span>コスト超過: 試算 ¥@(GetThemePeriodCost(theme.Id).ToString("N0")) ／ 受注 ¥@(theme.OrderAmount.ToString("N0"))</span>
+                                        <span>コスト超過: 試算 ¥@(periodCost2.ToString("N0"))@(carryOver2 > 0 ? $" ＋ 繰越 ¥{carryOver2.ToString("N0")} ＝ ¥{totalCost2.ToString("N0")}" : "") ／ 受注 ¥@(theme.OrderAmount.ToString("N0"))</span>
                                     }
                                     else
                                     {
-                                        <span>コスト試算: ¥@(GetThemePeriodCost(theme.Id).ToString("N0")) ／ 受注 ¥@(theme.OrderAmount.ToString("N0"))</span>
+                                        <span>コスト試算: ¥@(periodCost2.ToString("N0"))@(carryOver2 > 0 ? $" ＋ 繰越 ¥{carryOver2.ToString("N0")} ＝ ¥{totalCost2.ToString("N0")}" : "") ／ 受注 ¥@(theme.OrderAmount.ToString("N0"))</span>
                                     }
                                 </td>
                             </tr>
@@ -213,6 +233,9 @@
     private Dictionary<(int, int), int> _baseWorkDays = new();
     // Key: (EngineerId, Year, Month) -> 個別調整稼働日数
     private Dictionary<(int, int, int), int> _adjustmentWorkDays = new();
+
+    // Key: ThemeId -> 前期繰越工数
+    private Dictionary<int, decimal> _carryOverMap = new();
 
     private static int GetDefaultFiscalYear()
     {
@@ -247,6 +270,14 @@
                     _allocMap[(a.EngineerId, a.ThemeId, a.Year, a.Month)] = a.AllocatedHours;
             }
             _loaded = true;
+
+            // 前期繰越データ読み込み
+            _carryOverMap.Clear();
+            var carryOvers = await Db.ThemeCarryOvers
+                .Where(c => c.FiscalYear == _fiscalYear && c.IsFirstHalf == _isFirstHalf)
+                .ToListAsync();
+            foreach (var co in carryOvers)
+                _carryOverMap[co.ThemeId] = co.CarryOverAmount;
 
             // 稼働日数データ読み込み（エンジニア上限チェック用）
             _baseWorkDays.Clear();
@@ -316,6 +347,45 @@
     private decimal GetThemeTotal(int themeId)
         => _periodMonths.Sum(p => GetThemeMonthTotal(themeId, p.Year, p.Month));
 
+    private decimal GetCarryOver(int themeId)
+        => _carryOverMap.TryGetValue(themeId, out var co) ? co : 0;
+
+    private async Task OnCarryOverChanged(int themeId, string? valueStr)
+    {
+        var cleaned = valueStr?.Replace(",", "").Replace("¥", "").Trim();
+        if (!decimal.TryParse(cleaned, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var value) || value < 0)
+            value = 0;
+
+        _carryOverMap[themeId] = value;
+
+        try
+        {
+            var existing = await Db.ThemeCarryOvers.FirstOrDefaultAsync(
+                c => c.ThemeId == themeId && c.FiscalYear == _fiscalYear && c.IsFirstHalf == _isFirstHalf);
+            if (existing != null)
+            {
+                existing.CarryOverAmount = value;
+            }
+            else
+            {
+                Db.ThemeCarryOvers.Add(new ThemeCarryOver
+                {
+                    ThemeId = themeId,
+                    FiscalYear = _fiscalYear,
+                    IsFirstHalf = _isFirstHalf,
+                    CarryOverAmount = value
+                });
+            }
+            await Db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"保存失敗: {ex.Message}", Severity.Error);
+        }
+        StateHasChanged();
+    }
+
     private static string FormatHours(decimal h) => h == 0 ? "-" : $"{h:F0}h";
 
     // ===== エンジニア稼働上限 =====
@@ -326,7 +396,7 @@
         int days = _adjustmentWorkDays.TryGetValue((engId, year, month), out var adj)
             ? adj
             : _baseWorkDays.TryGetValue((year, month), out var baseWd) ? baseWd : 0;
-        return days * 8m * 0.9m;
+        return days * 8m * CapacitySettings.Coefficient;
     }
 
     /// <summary>エンジニアの月合計が稼働上限を超えているか</summary>
@@ -334,6 +404,14 @@
     {
         var cap = GetCapacity(engId, year, month);
         return cap > 0 && GetEngineerMonthTotal(engId, year, month) > cap;
+    }
+
+    /// <summary>稼動が上限の90%未満</summary>
+    private bool IsUnderCapacityMin(int engId, int year, int month)
+    {
+        var cap = GetCapacity(engId, year, month);
+        var total = GetEngineerMonthTotal(engId, year, month);
+        return cap > 0 && total < cap * 0.9m;
     }
 
     // ===== テーマ完了予定月・コスト =====

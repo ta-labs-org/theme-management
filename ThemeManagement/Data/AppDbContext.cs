@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<EngineerMonthlyAdjustment> EngineerMonthlyAdjustments => Set<EngineerMonthlyAdjustment>();
     public DbSet<Theme> Themes => Set<Theme>();
     public DbSet<EngineerThemeAllocation> EngineerThemeAllocations => Set<EngineerThemeAllocation>();
+    public DbSet<ThemeCarryOver> ThemeCarryOvers => Set<ThemeCarryOver>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -24,6 +25,9 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<EngineerThemeAllocation>()
             .HasIndex(e => new { e.EngineerId, e.ThemeId, e.Year, e.Month }).IsUnique();
+
+        modelBuilder.Entity<ThemeCarryOver>()
+            .HasIndex(e => new { e.ThemeId, e.FiscalYear, e.IsFirstHalf }).IsUnique();
     }
 
     public override int SaveChanges()

@@ -20,14 +20,11 @@
                 ※ テーマNoが既存のものと一致した場合は上書き更新します
             </MudAlert>
 
-            <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".csv" MaximumFileCount="1">
-                <ButtonTemplate>
-                    <MudButton HtmlTag="label" for="@context" Variant="Variant.Outlined"
-                               StartIcon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary">
-                        CSVファイルを選択
-                    </MudButton>
-                </ButtonTemplate>
-            </MudFileUpload>
+            <MudFileUpload T="IBrowserFile" @ref="_fileUpload" FilesChanged="OnFileSelected" Accept=".csv" MaximumFileCount="1" />
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FolderOpen"
+                       Color="Color.Primary" OnClick="@(() => _fileUpload!.OpenFilePickerAsync())">
+                CSVファイルを選択
+            </MudButton>
 
             @if (_fileName != null)
             {
@@ -103,6 +100,7 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
+    private MudFileUpload<IBrowserFile>? _fileUpload;
     private string? _fileName;
     private bool _parsed;
     private bool _importing;

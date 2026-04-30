@@ -68,13 +68,24 @@ public class DashboardService : IDashboardService
             .Where(a => themeIds.Contains(a.ThemeId))
             .ToListAsync();
 
+        // 現在の半期の前期繰越を取得
+        var today = DateTime.Today;
+        int fiscalYear = today.Month >= 4 ? today.Year : today.Year - 1;
+        bool isFirstHalf = today.Month >= 4 && today.Month <= 9;
+        var carryOvers = await _db.ThemeCarryOvers
+            .Where(c => c.FiscalYear == fiscalYear && c.IsFirstHalf == isFirstHalf)
+            .ToListAsync();
+        var carryOverMap = carryOvers.ToDictionary(c => c.ThemeId, c => c.CarryOverAmount);
+
         var now = DateTime.Now;
         var result = new List<ThemeProgressDto>();
 
         foreach (var theme in themes)
         {
             var themeAllocs = allAllocations.Where(a => a.ThemeId == theme.Id).ToList();
-            var totalCost = themeAllocs.Sum(a => a.AllocatedHours * a.Engineer.Grade.UnitSalePrice);
+            var allocCost = themeAllocs.Sum(a => a.AllocatedHours * a.Engineer.Grade.UnitSalePrice);
+            var carryOver = carryOverMap.GetValueOrDefault(theme.Id, 0m);
+            var totalCost = allocCost + carryOver;
             var progressRate = theme.OrderAmount > 0 ? totalCost / theme.OrderAmount * 100 : 0m;
             var remaining = theme.OrderAmount - totalCost;
 
@@ -82,7 +93,7 @@ public class DashboardService : IDashboardService
             if (themeAllocs.Any() && remaining > 0)
             {
                 var monthCount = themeAllocs.GroupBy(a => new { a.Year, a.Month }).Count();
-                var avgMonthlyCost = totalCost / monthCount;
+                var avgMonthlyCost = allocCost / monthCount;
                 if (avgMonthlyCost > 0)
                 {
                     var monthsNeeded = (int)Math.Ceiling((double)(remaining / avgMonthlyCost));
@@ -94,7 +105,7 @@ public class DashboardService : IDashboardService
 
             result.Add(new ThemeProgressDto(
                 theme.Id, theme.Name, theme.Status,
-                theme.OrderAmount, totalCost, progressRate, remaining,
+                theme.OrderAmount, allocCost, carryOver, progressRate, remaining,
                 estYear, estMonth));
         }
 

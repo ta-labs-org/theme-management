@@ -15,7 +15,11 @@
 </MudPaper>
 
 <MudText Typo="Typo.h6" Class="mb-2">エンジニア稼働サマリ（@(_year)年@(_month)月）</MudText>
-<MudTable Items="_engineerSummaries" Dense="true" Hover="true" Elevation="2" Class="mb-6">
+<MudTable Items="_engineerSummaries" Dense="true" Hover="true" Elevation="2" Class="mb-6"
+          RowClassFunc="@((row, _) => row.MaxDevelopableHours > 0 && row.TotalAllocatedHours > row.MaxDevelopableHours ? "row-over"
+                                    : row.MaxDevelopableHours > 0 && row.TotalAllocatedHours == 0 ? "row-unassigned"
+                                    : row.MaxDevelopableHours > 0 && row.TotalAllocatedHours > 0 && row.TotalAllocatedHours < row.MaxDevelopableHours * 0.1m ? "row-under"
+                                    : "")">
     <HeaderContent>
         <MudTh>エンジニア</MudTh>
         <MudTh>等級</MudTh>
@@ -35,7 +39,19 @@
                 @context.RemainingHours.ToString("F1")
             </MudText>
         </MudTd>
-        <MudTd Style="text-align:right">@context.WorkRate.ToString("F1")</MudTd>
+        <MudTd Style="text-align:right">
+            @{
+                var rateColor = context.MaxDevelopableHours > 0 && context.WorkRate > 100 ? Color.Error
+                              : context.MaxDevelopableHours > 0 && context.TotalAllocatedHours > 0 && context.WorkRate < 10 ? Color.Warning
+                              : Color.Default;
+                var rateWeight = rateColor != Color.Default ? "font-weight:700" : "";
+            }
+            <MudText Color="@rateColor" Style="@rateWeight">
+                @context.WorkRate.ToString("F1")
+                @if (context.MaxDevelopableHours > 0 && context.WorkRate > 100) { <text> ⚠</text> }
+                @if (context.MaxDevelopableHours > 0 && context.TotalAllocatedHours > 0 && context.WorkRate < 10) { <text> ↓</text> }
+            </MudText>
+        </MudTd>
         <MudTd>
             <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
                            Href="@($"/engineers/{context.EngineerId}/allocation")" />
@@ -45,11 +61,14 @@
 </MudTable>
 
 <MudText Typo="Typo.h6" Class="mb-2">テーマ進捗サマリ（アクティブ案件）</MudText>
-<MudTable Items="_themeProgress" Dense="true" Hover="true" Elevation="2">
+<MudTable Items="_themeProgress" Dense="true" Hover="true" Elevation="2"
+          RowClassFunc="@((row, _) => row.ProgressRate > 100 ? "row-over" : "")">
     <HeaderContent>
         <MudTh>テーマ名</MudTh>
         <MudTh Style="text-align:right">受注金額(円)</MudTh>
-        <MudTh Style="text-align:right">累計稼働金額(円)</MudTh>
+        <MudTh Style="text-align:right">稼働コスト(円)</MudTh>
+        <MudTh Style="text-align:right">前期繰越(円)</MudTh>
+        <MudTh Style="text-align:right">合計コスト(円)</MudTh>
         <MudTh Style="text-align:right">消化率(%)</MudTh>
         <MudTh Style="text-align:right">残余金額(円)</MudTh>
         <MudTh>完了見込み</MudTh>
@@ -59,6 +78,17 @@
         <MudTd>@context.ThemeName</MudTd>
         <MudTd Style="text-align:right">@context.OrderAmount.ToString("N0")</MudTd>
         <MudTd Style="text-align:right">@context.TotalAllocatedCost.ToString("N0")</MudTd>
+        <MudTd Style="text-align:right">
+            @if (context.CarryOverAmount > 0)
+            {
+                <MudText Style="color:#6a1b9a;font-weight:600">@context.CarryOverAmount.ToString("N0")</MudText>
+            }
+            else
+            {
+                <span style="color:#bdbdbd">—</span>
+            }
+        </MudTd>
+        <MudTd Style="text-align:right;font-weight:600">@((context.TotalAllocatedCost + context.CarryOverAmount).ToString("N0"))</MudTd>
         <MudTd Style="text-align:right">
             <MudText Color="@(context.ProgressRate > 100 ? Color.Error : Color.Default)">
                 @context.ProgressRate.ToString("F1")

@@ -30,6 +30,7 @@ public record ThemeProgressDto(
     string Status,
     decimal OrderAmount,
     decimal TotalAllocatedCost,
+    decimal CarryOverAmount,
     decimal ProgressRate,
     decimal RemainingAmount,
     int? EstimatedCompletionYear,
