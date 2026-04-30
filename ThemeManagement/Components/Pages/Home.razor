@@ -108,11 +108,35 @@
     <NoRecordsContent><MudText>アクティブなテーマがありません</MudText></NoRecordsContent>
 </MudTable>
 
+@if (_alerts.Count > 0)
+{
+    <MudText Typo="Typo.h6" Class="mb-2 mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Color="Color.Warning" Class="mr-1" />警告・アラート
+    </MudText>
+    <MudPaper Class="pa-3 mb-4" Elevation="2">
+        <MudStack Spacing="2">
+            @foreach (var alert in _alerts)
+            {
+                var severity = alert.Severity switch
+                {
+                    "error" => Severity.Error,
+                    "warning" => Severity.Warning,
+                    _ => Severity.Info
+                };
+                <MudAlert Severity="@severity" Dense="true">
+                    <MudText><strong>[@alert.Category]</strong> @alert.Message</MudText>
+                </MudAlert>
+            }
+        </MudStack>
+    </MudPaper>
+}
+
 @code {
     private int _year = DateTime.Now.Year;
     private int _month = DateTime.Now.Month;
     private List<EngineerWorkSummaryDto> _engineerSummaries = [];
     private List<ThemeProgressDto> _themeProgress = [];
+    private List<AlertItemDto> _alerts = [];
 
     protected override async Task OnInitializedAsync() => await LoadData();
 
@@ -120,5 +144,6 @@
     {
         _engineerSummaries = await DashboardService.GetEngineerSummaryAsync(_year, _month);
         _themeProgress = await DashboardService.GetThemeProgressAsync();
+        _alerts = await DashboardService.GetAlertsAsync(_year, _month);
     }
 }

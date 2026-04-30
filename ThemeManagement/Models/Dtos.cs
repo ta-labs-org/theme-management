@@ -36,3 +36,9 @@ public record ThemeProgressDto(
     int? EstimatedCompletionYear,
     int? EstimatedCompletionMonth
 );
+
+public record AlertItemDto(
+    string Severity,    // "error" | "warning" | "info"
+    string Category,
+    string Message
+);

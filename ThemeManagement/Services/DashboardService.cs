@@ -8,6 +8,7 @@ public interface IDashboardService
 {
     Task<List<EngineerWorkSummaryDto>> GetEngineerSummaryAsync(int year, int month);
     Task<List<ThemeProgressDto>> GetThemeProgressAsync();
+    Task<List<AlertItemDto>> GetAlertsAsync(int year, int month);
 }
 
 public class DashboardService : IDashboardService
@@ -111,5 +112,39 @@ public class DashboardService : IDashboardService
         }
 
         return result;
+    }
+
+    public async Task<List<AlertItemDto>> GetAlertsAsync(int year, int month)
+    {
+        var alerts = new List<AlertItemDto>();
+
+        // -- エンジニア稼働アラート --
+        var summaries = await GetEngineerSummaryAsync(year, month);
+        foreach (var e in summaries)
+        {
+            if (e.MaxDevelopableHours > 0 && e.WorkRate > 120)
+                alerts.Add(new AlertItemDto("error", "稼働超過", $"{e.EngineerName} の稼働率が {e.WorkRate:F0}% です（{year}/{month}）"));
+            else if (e.MaxDevelopableHours > 0 && e.WorkRate > 100)
+                alerts.Add(new AlertItemDto("warning", "稼働超過", $"{e.EngineerName} の稼働率が {e.WorkRate:F0}% です（{year}/{month}）"));
+            else if (e.MaxDevelopableHours > 0 && e.TotalAllocatedHours == 0)
+                alerts.Add(new AlertItemDto("warning", "未割当", $"{e.EngineerName} に{year}/{month}の工数が割り当てられていません"));
+        }
+
+        // -- テーマアラート --
+        var themes = await _db.Themes.Where(t => t.Status == "Active").ToListAsync();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var themeProgress = await GetThemeProgressAsync();
+        foreach (var t in themeProgress)
+        {
+            if (t.ProgressRate > 100)
+                alerts.Add(new AlertItemDto("error", "予算超過", $"テーマ「{t.ThemeName}」が予算超過です（消化率 {t.ProgressRate:F0}%）"));
+        }
+        foreach (var t in themes)
+        {
+            if (t.EstimatedCompletionDate < today)
+                alerts.Add(new AlertItemDto("warning", "完了期限超過", $"テーマ「{t.Name}」の完了予定日（{t.EstimatedCompletionDate:yyyy/MM/dd}）を過ぎています"));
+        }
+
+        return alerts.OrderBy(a => a.Severity == "error" ? 0 : a.Severity == "warning" ? 1 : 2).ToList();
     }
 }
