@@ -19,8 +19,12 @@
                            Required="true" DateFormat="yyyy/MM/dd" />
             <MudNumericField T="decimal" @bind-Value="Theme.OrderAmount" Label="受注金額（円）" Min="1" Required="true" />
             <MudSelect T="string" @bind-Value="Theme.Status" Label="状態" Required="true">
+                <MudSelectItem T="string" Value="@("Quoting")">見積中</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Confirmed")">受注確定</MudSelectItem>
                 <MudSelectItem T="string" Value="@("Active")">進行中</MudSelectItem>
+                <MudSelectItem T="string" Value="@("OnHold")">一時停止</MudSelectItem>
                 <MudSelectItem T="string" Value="@("Completed")">完了</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Lost")">失注</MudSelectItem>
                 <MudSelectItem T="string" Value="@("Cancelled")">中止</MudSelectItem>
             </MudSelect>
             @if (Theme.Status == "Completed")

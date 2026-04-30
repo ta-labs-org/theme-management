@@ -95,16 +95,24 @@
 
     private static Color StatusColor(string status) => status switch
     {
+        "Quoting" => Color.Warning,
+        "Confirmed" => Color.Tertiary,
         "Active" => Color.Success,
+        "OnHold" => Color.Dark,
         "Completed" => Color.Info,
+        "Lost" => Color.Error,
         "Cancelled" => Color.Default,
         _ => Color.Default
     };
 
     private static string StatusLabel(string status) => status switch
     {
+        "Quoting" => "見積中",
+        "Confirmed" => "受注確定",
         "Active" => "進行中",
+        "OnHold" => "一時停止",
         "Completed" => "完了",
+        "Lost" => "失注",
         "Cancelled" => "中止",
         _ => status
     };

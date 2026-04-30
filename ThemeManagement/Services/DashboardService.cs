@@ -57,7 +57,7 @@ public class DashboardService : IDashboardService
     public async Task<List<ThemeProgressDto>> GetThemeProgressAsync()
     {
         var themes = await _db.Themes
-            .Where(t => t.Status == "Active")
+            .Where(t => t.Status == "Active" || t.Status == "Confirmed")
             .OrderByDescending(t => t.OrderDate)
             .ToListAsync();
 
