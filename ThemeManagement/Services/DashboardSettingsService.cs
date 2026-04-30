@@ -28,12 +28,26 @@ public class DashboardSettingsService : IDashboardSettingsService
     private readonly IJSRuntime _js;
     private const string StorageKey = "dashboard-settings";
 
-    private static readonly List<WidgetConfig> DefaultWidgets =
+    public static readonly List<WidgetConfig> DefaultWidgets =
     [
         new() { Id = "kpi", DisplayName = "KPIカード", IsVisible = true, Order = 0 },
         new() { Id = "engineer-summary", DisplayName = "エンジニア稼働サマリ", IsVisible = true, Order = 1 },
         new() { Id = "theme-progress", DisplayName = "テーマ進捗サマリ", IsVisible = true, Order = 2 }
     ];
+
+    public static readonly List<string> DefaultPinnedKpis = ["project-count", "work-rate", "monthly-cost"];
+
+    public static DashboardSettings CreateDefaultSettings() => new()
+    {
+        Widgets = DefaultWidgets.Select(w => new WidgetConfig
+        {
+            Id = w.Id,
+            DisplayName = w.DisplayName,
+            IsVisible = w.IsVisible,
+            Order = w.Order
+        }).ToList(),
+        PinnedKpis = [.. DefaultPinnedKpis]
+    };
 
     public DashboardSettingsService(IJSRuntime js)
     {
@@ -75,20 +89,11 @@ public class DashboardSettingsService : IDashboardSettingsService
         }
         catch
         {
-            // Fall through to defaults on any error
+            // LocalStorage access can fail (e.g. SSR, private browsing restrictions, malformed JSON).
+            // Silently fall back to defaults so the dashboard always renders correctly.
         }
 
-        return new DashboardSettings
-        {
-            Widgets = DefaultWidgets.Select(w => new WidgetConfig
-            {
-                Id = w.Id,
-                DisplayName = w.DisplayName,
-                IsVisible = w.IsVisible,
-                Order = w.Order
-            }).ToList(),
-            PinnedKpis = ["project-count", "work-rate", "monthly-cost"]
-        };
+        return CreateDefaultSettings();
     }
 
     public async Task SaveAsync(DashboardSettings settings)

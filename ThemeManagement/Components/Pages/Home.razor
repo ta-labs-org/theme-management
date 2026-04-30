@@ -83,7 +83,7 @@
                                     </MudStack>
                                     <MudIcon Icon="@Icons.Material.Filled.CurrencyYen" Color="Color.Warning" Style="font-size:2.5rem" />
                                     <MudText Typo="Typo.h4" Class="mt-1">¥@_kpi.TotalMonthlyCost.ToString("N0")</MudText>
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary">月間売上（稼働コスト）</MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">月間稼働コスト</MudText>
                                 </MudCardContent>
                             </MudCard>
                         </MudItem>
@@ -247,16 +247,7 @@
     private List<ThemeProgressDto> _themeProgress = [];
     private DashboardKpiDto? _kpi;
 
-    private DashboardSettings _settings = new()
-    {
-        Widgets =
-        [
-            new() { Id = "kpi", DisplayName = "KPIカード", IsVisible = true, Order = 0 },
-            new() { Id = "engineer-summary", DisplayName = "エンジニア稼働サマリ", IsVisible = true, Order = 1 },
-            new() { Id = "theme-progress", DisplayName = "テーマ進捗サマリ", IsVisible = true, Order = 2 }
-        ],
-        PinnedKpis = ["project-count", "work-rate", "monthly-cost"]
-    };
+    private DashboardSettings _settings = DashboardSettingsService.CreateDefaultSettings();
     private bool _customizePanelOpen = false;
     private MudDropContainer<WidgetConfig>? _dropContainer;
 
@@ -266,6 +257,8 @@
     {
         if (firstRender)
         {
+            // JSRuntime (localStorage) is only available after the Blazor circuit is connected,
+            // which is after the first render — so settings must be loaded here, not in OnInitializedAsync.
             _settings = await SettingsService.LoadAsync();
             StateHasChanged();
         }
@@ -312,16 +305,7 @@
 
     private async Task ResetSettings()
     {
-        _settings = new DashboardSettings
-        {
-            Widgets =
-            [
-                new() { Id = "kpi", DisplayName = "KPIカード", IsVisible = true, Order = 0 },
-                new() { Id = "engineer-summary", DisplayName = "エンジニア稼働サマリ", IsVisible = true, Order = 1 },
-                new() { Id = "theme-progress", DisplayName = "テーマ進捗サマリ", IsVisible = true, Order = 2 }
-            ],
-            PinnedKpis = ["project-count", "work-rate", "monthly-cost"]
-        };
+        _settings = DashboardSettingsService.CreateDefaultSettings();
         await SettingsService.SaveAsync(_settings);
         _dropContainer?.Refresh();
     }
