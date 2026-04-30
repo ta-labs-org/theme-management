@@ -1,5 +1,6 @@
 @page "/engineers"
 @rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject IEngineerService EngineerService
 @inject IGradeService GradeService
 @inject ISnackbar Snackbar
@@ -10,8 +11,12 @@
 <MudText Typo="Typo.h5" Class="mb-4">エンジニア一覧</MudText>
 
 <MudStack Row="true" Spacing="3" Class="mb-4" AlignItems="AlignItems.Center">
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-               OnClick="OpenAddDialog">新規追加</MudButton>
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenAddDialog">新規追加</MudButton>
+        </Authorized>
+    </AuthorizeView>
     <MudCheckBox T="bool" Value="_showInactive" ValueChanged="@(async v => { _showInactive = v; await LoadAsync(); })" Label="退職者を含める" />
 </MudStack>
 
@@ -31,14 +36,22 @@
             </MudChip>
         </MudTd>
         <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+            <AuthorizeView Roles="Admin" Context="authCtx">
+                <Authorized>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+                </Authorized>
+            </AuthorizeView>
             <MudIconButton Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" Color="Color.Info"
                            Href="@($"/engineers/{context.Id}/allocation")" />
-            @if (context.IsActive)
-            {
-                <MudIconButton Icon="@Icons.Material.Filled.PersonOff" Size="Size.Small" Color="Color.Warning"
-                               OnClick="() => DeactivateAsync(context)" />
-            }
+            <AuthorizeView Roles="Admin" Context="authCtx2">
+                <Authorized>
+                    @if (context.IsActive)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.PersonOff" Size="Size.Small" Color="Color.Warning"
+                                       OnClick="() => DeactivateAsync(context)" />
+                    }
+                </Authorized>
+            </AuthorizeView>
         </MudTd>
     </RowTemplate>
     <NoRecordsContent><MudText>エンジニアが登録されていません</MudText></NoRecordsContent>

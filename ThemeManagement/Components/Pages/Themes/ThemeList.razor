@@ -1,5 +1,6 @@
 @page "/themes"
 @rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject IThemeService ThemeService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -9,10 +10,14 @@
 <MudText Typo="Typo.h5" Class="mb-4">テーマ・案件一覧</MudText>
 
 <MudStack Row="true" Spacing="3" Class="mb-4" AlignItems="AlignItems.Center">
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-               OnClick="OpenAddDialog">新規登録</MudButton>
-    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.UploadFile"
-               OnClick="OpenCsvImportDialog">CSVインポート</MudButton>
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenAddDialog">新規登録</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.UploadFile"
+                       OnClick="OpenCsvImportDialog">CSVインポート</MudButton>
+        </Authorized>
+    </AuthorizeView>
     <MudCheckBox T="bool" Value="_showAll" ValueChanged="@(async v => { _showAll = v; await LoadAsync(); })" Label="完了・中止も表示" />
 </MudStack>
 
@@ -40,7 +45,11 @@
             </MudChip>
         </MudTd>
         <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+            <AuthorizeView Roles="Admin" Context="authCtx">
+                <Authorized>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+                </Authorized>
+            </AuthorizeView>
             <MudIconButton Icon="@Icons.Material.Filled.BarChart" Size="Size.Small" Color="Color.Info"
                            Href="@($"/themes/{context.Id}/allocation")" />
         </MudTd>

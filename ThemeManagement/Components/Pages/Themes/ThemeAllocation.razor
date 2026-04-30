@@ -1,5 +1,6 @@
 @page "/themes/{ThemeId:int}/allocation"
 @rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject IThemeService ThemeService
 @inject IAllocationService AllocationService
 @inject IEngineerService EngineerService
@@ -38,8 +39,12 @@ else
         </MudStack>
     </MudPaper>
 
-    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-               OnClick="OpenAddDialog" Class="mb-3">エンジニア追加</MudButton>
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenAddDialog" Class="mb-3">エンジニア追加</MudButton>
+        </Authorized>
+    </AuthorizeView>
 
     <MudTable Items="_allocations" Dense="true" Hover="true" Elevation="2">
         <HeaderContent>
@@ -48,7 +53,11 @@ else
             <MudTh Style="text-align:right">割り当て(h)</MudTh>
             <MudTh Style="text-align:right">単価(円/h)</MudTh>
             <MudTh Style="text-align:right">売価小計(円)</MudTh>
-            <MudTh>操作</MudTh>
+            <AuthorizeView Roles="Admin" Context="authCtx">
+                <Authorized>
+                    <MudTh>操作</MudTh>
+                </Authorized>
+            </AuthorizeView>
         </HeaderContent>
         <RowTemplate>
             <MudTd>@context.EngineerName</MudTd>
@@ -56,11 +65,15 @@ else
             <MudTd Style="text-align:right">@context.AllocatedHours.ToString("F1")</MudTd>
             <MudTd Style="text-align:right">@context.UnitSalePrice.ToString("N0")</MudTd>
             <MudTd Style="text-align:right">@((context.AllocatedHours * context.UnitSalePrice).ToString("N0"))</MudTd>
-            <MudTd>
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
-                               OnClick="() => DeleteAsync(context)" />
-            </MudTd>
+            <AuthorizeView Roles="Admin" Context="authCtx">
+                <Authorized>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="() => DeleteAsync(context)" />
+                    </MudTd>
+                </Authorized>
+            </AuthorizeView>
         </RowTemplate>
         <NoRecordsContent><MudText>割り当てがありません</MudText></NoRecordsContent>
     </MudTable>

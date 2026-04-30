@@ -1,0 +1,117 @@
+@page
+@model ThemeManagement.Pages.Account.LoginModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ログイン - テーマ稼働管理システム</title>
+    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .login-container {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+            padding: 48px 40px 40px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .login-title {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: #1976d2;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .login-subtitle {
+            font-size: 0.875rem;
+            color: #757575;
+            margin-bottom: 32px;
+            text-align: center;
+        }
+        .form-group { margin-bottom: 20px; }
+        label {
+            display: block;
+            font-size: 0.875rem;
+            color: #424242;
+            margin-bottom: 6px;
+        }
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #bdbdbd;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input[type="email"]:focus,
+        input[type="password"]:focus {
+            border-color: #1976d2;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: inherit;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 8px;
+        }
+        .btn-login:hover { background: #1565c0; }
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            border-radius: 4px;
+            padding: 10px 14px;
+            font-size: 0.875rem;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-title">テーマ稼働管理システム</div>
+        <div class="login-subtitle">ログイン</div>
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="error-message">@Model.ErrorMessage</div>
+        }
+
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <div class="form-group">
+                <label for="email">メールアドレス</label>
+                <input type="email" id="email" name="Input.Email" value="@Model.Input.Email"
+                       autocomplete="username" required />
+            </div>
+            <div class="form-group">
+                <label for="password">パスワード</label>
+                <input type="password" id="password" name="Input.Password"
+                       autocomplete="current-password" required />
+            </div>
+            <button type="submit" class="btn-login">ログイン</button>
+        </form>
+    </div>
+</body>
+</html>
