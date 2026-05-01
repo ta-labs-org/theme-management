@@ -178,13 +178,33 @@ else
             "コピー実行");
         if (!confirmed) return;
 
-        var count = await AllocationService.CopyFromPreviousMonthAsync(ThemeId, _year, _month);
+        int count;
+        try
+        {
+            count = await AllocationService.CopyFromPreviousMonthAsync(ThemeId, _year, _month);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "前月割り当てのコピー中にエラーが発生しました (ThemeId={ThemeId}, Year={Year}, Month={Month})", ThemeId, _year, _month);
+            Snackbar.Add("前月割り当てのコピー中にエラーが発生しました", Severity.Error);
+            return;
+        }
+
         if (count == 0)
             Snackbar.Add($"{prevDate.Year}/{prevDate.Month:D2} の割り当てデータがありません", Severity.Warning);
         else
         {
             Snackbar.Add($"{count} 件の割り当てをコピーしました", Severity.Success);
-            await LoadAllocations();
+
+            try
+            {
+                await LoadAllocations();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "前月割り当てコピー後の再読込中にエラーが発生しました (ThemeId={ThemeId}, Year={Year}, Month={Month})", ThemeId, _year, _month);
+                Snackbar.Add("コピーは完了しましたが、一覧の再読込に失敗しました", Severity.Warning);
+            }
         }
     }
 
