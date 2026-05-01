@@ -1,11 +1,9 @@
 @page "/report/profitability"
 @rendermode InteractiveServer
 @using ThemeManagement.Data
-@using ThemeManagement.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
 @inject AppDbContext Db
-@inject IThemeService ThemeService
 
 <PageTitle>テーマ別採算レポート</PageTitle>
 
@@ -97,7 +95,7 @@ else
         try
         {
             var themes = await Db.Themes.AsNoTracking()
-                .Where(t => _showAll || t.Status == "Active" || t.Status == "Confirmed" || t.Status == "OnHold")
+                .Where(t => _showAll || t.Status == "Active")
                 .OrderByDescending(t => t.OrderDate)
                 .ToListAsync();
 
@@ -106,10 +104,11 @@ else
                 .Include(a => a.Engineer).ThenInclude(e => e.Grade)
                 .Where(a => themeIds.Contains(a.ThemeId))
                 .ToListAsync();
+            var allocsByThemeId = allocs.ToLookup(a => a.ThemeId);
 
             _rows = themes.Select(t =>
             {
-                var ta = allocs.Where(a => a.ThemeId == t.Id).ToList();
+                var ta = allocsByThemeId[t.Id];
                 var saleCost = ta.Sum(a => a.AllocatedHours * a.Engineer.Grade.UnitSalePrice);
                 var costPrice = ta.Sum(a => a.AllocatedHours * a.Engineer.Grade.UnitCostPrice);
                 var rate = t.OrderAmount > 0 ? saleCost / t.OrderAmount * 100m : 0m;
