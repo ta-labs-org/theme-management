@@ -117,18 +117,48 @@
     <NoRecordsContent><MudText>アクティブなテーマがありません</MudText></NoRecordsContent>
 </MudTable>
 
+@if (_alerts.Count > 0)
+{
+    <MudText Typo="Typo.h6" Class="mb-2 mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Color="Color.Warning" Class="mr-1" />警告・アラート
+    </MudText>
+    <MudPaper Class="pa-3 mb-4" Elevation="2">
+        <MudStack Spacing="2">
+            @foreach (var alert in _alerts)
+            {
+                var severity = alert.Severity switch
+                {
+                    AlertSeverity.Error => Severity.Error,
+                    AlertSeverity.Warning => Severity.Warning,
+                    _ => Severity.Info
+                };
+                <MudAlert Severity="@severity" Dense="true">
+                    <MudText><strong>[@alert.Category]</strong> @alert.Message</MudText>
+                </MudAlert>
+            }
+        </MudStack>
+    </MudPaper>
+}
+
 @code {
     private int _year = DateTime.Now.Year;
     private int _month = DateTime.Now.Month;
     private List<EngineerWorkSummaryDto> _engineerSummaries = [];
     private List<ThemeProgressDto> _themeProgress = [];
+    private List<AlertItemDto> _alerts = [];
 
     protected override async Task OnInitializedAsync() => await LoadData();
 
     private async Task LoadData()
     {
-        _engineerSummaries = await DashboardService.GetEngineerSummaryAsync(_year, _month);
-        _themeProgress = await DashboardService.GetThemeProgressAsync();
+        var engineerSummariesTask = DashboardService.GetEngineerSummaryAsync(_year, _month);
+        var themeProgressTask = DashboardService.GetThemeProgressAsync();
+
+        await Task.WhenAll(engineerSummariesTask, themeProgressTask);
+
+        _engineerSummaries = await engineerSummariesTask;
+        _themeProgress = await themeProgressTask;
+        _alerts = DashboardService.GetAlerts(_year, _month, _engineerSummaries, _themeProgress);
     }
 
     private static string CsvField(string? value)
