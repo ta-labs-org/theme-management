@@ -49,7 +49,7 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 // DB バックアップダウンロード
-app.MapGet("/api/backup/download", async (IConfiguration config, HttpContext context) =>
+app.MapGet("/api/backup/download", async (IConfiguration config) =>
 {
     var connStr = config.GetConnectionString("DefaultConnection") ?? "Data Source=theme_management.db";
     // SQLiteのパスを抽出
@@ -74,17 +74,11 @@ app.MapGet("/api/backup/download", async (IConfiguration config, HttpContext con
         cmd.CommandText = $"VACUUM INTO '{escapedTempFile}'";
         await cmd.ExecuteNonQueryAsync();
 
-        var fileName = Path.GetFileName(tempFile);
+        var fileName = $"theme_backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}.db";
+        var bytes = await File.ReadAllBytesAsync(tempFile);
+        File.Delete(tempFile);
 
-        context.Response.OnCompleted(() =>
-        {
-            if (File.Exists(tempFile))
-                File.Delete(tempFile);
-
-            return Task.CompletedTask;
-        });
-
-        return Results.PhysicalFile(tempFile, "application/octet-stream", fileName);
+        return Results.File(bytes, "application/octet-stream", fileName);
     }
     catch
     {
