@@ -104,31 +104,52 @@ else
 
             var engineerIds = engineers.Select(e => e.Id).ToList();
 
+            // Use year*12+(month-1) key for correct period range filtering (avoids cross-product bug with separate year/month IN checks)
+            int periodMinKey = periods.Min(p => p.Year * 12 + (p.Month - 1));
+            int periodMaxKey = periods.Max(p => p.Year * 12 + (p.Month - 1));
+
             var allAllocations = await Db.EngineerThemeAllocations.AsNoTracking()
                 .Where(a => engineerIds.Contains(a.EngineerId)
-                         && periods.Select(p => p.Year).Contains(a.Year)
-                         && periods.Select(p => p.Month).Contains(a.Month))
+                         && (a.Year * 12 + (a.Month - 1)) >= periodMinKey
+                         && (a.Year * 12 + (a.Month - 1)) <= periodMaxKey)
                 .ToListAsync();
 
             var allWorkDays = await Db.MonthlyWorkDays.AsNoTracking()
-                .Where(w => periods.Select(p => p.Year).Contains(w.Year)
-                         && periods.Select(p => p.Month).Contains(w.Month))
+                .Where(w => (w.Year * 12 + (w.Month - 1)) >= periodMinKey
+                         && (w.Year * 12 + (w.Month - 1)) <= periodMaxKey)
                 .ToListAsync();
 
             var allAdjustments = await Db.EngineerMonthlyAdjustments.AsNoTracking()
                 .Where(a => engineerIds.Contains(a.EngineerId)
-                         && periods.Select(p => p.Year).Contains(a.Year)
-                         && periods.Select(p => p.Month).Contains(a.Month))
+                         && (a.Year * 12 + (a.Month - 1)) >= periodMinKey
+                         && (a.Year * 12 + (a.Month - 1)) <= periodMaxKey)
                 .ToListAsync();
+
+            // Pre-build dictionaries for O(1) lookups instead of repeated linear scans
+            var allocationDict = allAllocations
+                .GroupBy(a => (a.EngineerId, a.Year, a.Month))
+                .ToDictionary(g => g.Key, g => g.Sum(a => a.AllocatedHours));
+
+            var teamAllocationDict = allAllocations
+                .GroupBy(a => (a.Year, a.Month))
+                .ToDictionary(g => g.Key, g => g.Sum(a => a.AllocatedHours));
+
+            var adjustmentDict = allAdjustments
+                .GroupBy(a => (a.EngineerId, a.Year, a.Month))
+                .ToDictionary(g => g.Key, g => g.OrderBy(a => a.Id).First());
+
+            var workDaysDict = allWorkDays
+                .GroupBy(w => (w.Year, w.Month))
+                .ToDictionary(g => g.Key, g => g.OrderBy(w => w.Id).First().WorkDays);
 
             // エンジニア別折れ線グラフデータ
             _series = engineers.Select(e =>
             {
                 var data = periods.Select(p =>
-                    (double)allAllocations
-                        .Where(a => a.EngineerId == e.Id && a.Year == p.Year && a.Month == p.Month)
-                        .Sum(a => a.AllocatedHours)
-                ).ToArray();
+                {
+                    allocationDict.TryGetValue((e.Id, p.Year, p.Month), out var hours);
+                    return (double)hours;
+                }).ToArray();
                 return new ChartSeries<double> { Name = e.Name, Data = data };
             }).ToList();
 
@@ -138,16 +159,18 @@ else
                 double total = 0;
                 foreach (var e in engineers)
                 {
-                    var adj = allAdjustments.FirstOrDefault(a => a.EngineerId == e.Id && a.Year == p.Year && a.Month == p.Month);
-                    int wd = adj?.WorkDays ?? allWorkDays.FirstOrDefault(w => w.Year == p.Year && w.Month == p.Month)?.WorkDays ?? 0;
+                    adjustmentDict.TryGetValue((e.Id, p.Year, p.Month), out var adj);
+                    int wd = adj?.WorkDays ?? (workDaysDict.TryGetValue((p.Year, p.Month), out var wdVal) ? wdVal : 0);
                     total += (double)(wd * 8m * CapacitySettings.Coefficient);
                 }
                 return total;
             }).ToArray();
 
             var teamAllocated = periods.Select(p =>
-                (double)allAllocations.Where(a => a.Year == p.Year && a.Month == p.Month).Sum(a => a.AllocatedHours)
-            ).ToArray();
+            {
+                teamAllocationDict.TryGetValue((p.Year, p.Month), out var total);
+                return (double)total;
+            }).ToArray();
 
             _teamSeries =
             [
@@ -160,12 +183,10 @@ else
             {
                 var hours = periods.Select(p =>
                 {
-                    var adj = allAdjustments.FirstOrDefault(a => a.EngineerId == e.Id && a.Year == p.Year && a.Month == p.Month);
-                    int wd = adj?.WorkDays ?? allWorkDays.FirstOrDefault(w => w.Year == p.Year && w.Month == p.Month)?.WorkDays ?? 0;
+                    adjustmentDict.TryGetValue((e.Id, p.Year, p.Month), out var adj);
+                    int wd = adj?.WorkDays ?? (workDaysDict.TryGetValue((p.Year, p.Month), out var wdVal) ? wdVal : 0);
                     var max = wd * 8m * CapacitySettings.Coefficient;
-                    var allocated = allAllocations
-                        .Where(a => a.EngineerId == e.Id && a.Year == p.Year && a.Month == p.Month)
-                        .Sum(a => a.AllocatedHours);
+                    allocationDict.TryGetValue((e.Id, p.Year, p.Month), out var allocated);
                     return new HourCell(allocated, allocated > max && max > 0, allocated == 0);
                 }).ToList();
                 return new EngineerCapacityRow(e.Name, hours);
