@@ -58,7 +58,7 @@ else
             @foreach (var h in context.Hours)
             {
                 <MudTd Style="text-align:right">
-                    <MudText Color="@(h.IsOver ? Color.Error : h.IsEmpty ? Color.Default : Color.Default)"
+                    <MudText Color="@(h.IsOver ? Color.Error : Color.Default)"
                              Style="@(h.IsOver ? "font-weight:700" : "")">
                         @(h.Allocated > 0 ? h.Allocated.ToString("F1") : "—")
                         @if (h.IsOver) { <text> ⚠</text> }
