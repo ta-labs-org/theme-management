@@ -61,7 +61,9 @@ app.MapGet("/api/backup/download", async (IConfiguration config, HttpContext con
     if (!File.Exists(dataSource))
         return Results.NotFound("DBファイルが見つかりません");
 
-    var tempFile = Path.Combine(Path.GetTempPath(), $"theme_backup_{DateTime.Now:yyyyMMdd_HHmmss}.db");
+    var tempFile = Path.Combine(
+        Path.GetTempPath(),
+        $"theme_backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.db");
     try
     {
         // VACUUM INTO で安全にコピー（WALのコミット済みデータを含む）
