@@ -95,7 +95,7 @@ else
         try
         {
             var themes = await Db.Themes.AsNoTracking()
-                .Where(t => _showAll || t.Status == "Active" || t.Status == "Confirmed" || t.Status == "OnHold")
+                .Where(t => _showAll || t.Status == "Active")
                 .OrderByDescending(t => t.OrderDate)
                 .ToListAsync();
 
