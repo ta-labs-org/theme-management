@@ -142,8 +142,13 @@
 
     private async Task LoadData()
     {
-        _engineerSummaries = await DashboardService.GetEngineerSummaryAsync(_year, _month);
-        _themeProgress = await DashboardService.GetThemeProgressAsync();
-        _alerts = await DashboardService.GetAlertsAsync(_year, _month);
+        var engineerSummariesTask = DashboardService.GetEngineerSummaryAsync(_year, _month);
+        var themeProgressTask = DashboardService.GetThemeProgressAsync();
+
+        await Task.WhenAll(engineerSummariesTask, themeProgressTask);
+
+        _engineerSummaries = await engineerSummariesTask;
+        _themeProgress = await themeProgressTask;
+        _alerts = await DashboardService.GetAlertsAsync(_year, _month, _engineerSummaries, _themeProgress);
     }
 }
