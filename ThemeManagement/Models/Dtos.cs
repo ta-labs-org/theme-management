@@ -37,8 +37,15 @@ public record ThemeProgressDto(
     int? EstimatedCompletionMonth
 );
 
+public enum AlertSeverity
+{
+    Error,
+    Warning,
+    Info
+}
+
 public record AlertItemDto(
-    string Severity,    // "error" | "warning" | "info"
+    AlertSeverity Severity,
     string Category,
     string Message
 );
