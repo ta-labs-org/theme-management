@@ -74,14 +74,24 @@ app.MapGet("/api/backup/download", async (IConfiguration config, HttpContext con
         cmd.CommandText = $"VACUUM INTO '{escapedTempFile}'";
         await cmd.ExecuteNonQueryAsync();
 
-        var bytes = await File.ReadAllBytesAsync(tempFile);
         var fileName = Path.GetFileName(tempFile);
-        return Results.File(bytes, "application/octet-stream", fileName);
+
+        context.Response.OnCompleted(() =>
+        {
+            if (File.Exists(tempFile))
+                File.Delete(tempFile);
+
+            return Task.CompletedTask;
+        });
+
+        return Results.PhysicalFile(tempFile, "application/octet-stream", fileName);
     }
-    finally
+    catch
     {
         if (File.Exists(tempFile))
             File.Delete(tempFile);
+
+        throw;
     }
 });
 
