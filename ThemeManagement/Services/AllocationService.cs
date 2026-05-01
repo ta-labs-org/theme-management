@@ -203,30 +203,24 @@ public class AllocationService : IAllocationService
 
         if (prevAllocations.Count == 0) return 0;
 
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+
         int copied = 0;
-        foreach (var prev in prevAllocations)
+        try
         {
-            var existing = await _db.EngineerThemeAllocations
-                .FirstOrDefaultAsync(a => a.EngineerId == prev.EngineerId && a.ThemeId == themeId
-                                          && a.Year == year && a.Month == month);
-            if (existing == null)
+            foreach (var prev in prevAllocations)
             {
-                _db.EngineerThemeAllocations.Add(new EngineerThemeAllocation
-                {
-                    EngineerId = prev.EngineerId,
-                    ThemeId = themeId,
-                    Year = year,
-                    Month = month,
-                    AllocatedHours = prev.AllocatedHours
-                });
+                await UpsertAllocationAsync(prev.EngineerId, themeId, year, month, prev.AllocatedHours);
+                copied++;
             }
-            else
-            {
-                existing.AllocatedHours = prev.AllocatedHours;
-            }
-            copied++;
+
+            await transaction.CommitAsync();
+            return copied;
         }
-        await _db.SaveChangesAsync();
-        return copied;
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 }
