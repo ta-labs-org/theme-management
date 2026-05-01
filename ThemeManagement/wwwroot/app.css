@@ -229,6 +229,65 @@ html, body {
     letter-spacing: 0.01em;
 }
 
+/* テーマ月別合計目標行 */
+.row-theme-target td {
+    background: #e8eaf6;
+    border-top: 2px solid #7986cb;
+    border-bottom: 1px solid #9fa8da;
+}
+
+.cell-target-label {
+    background: #e8eaf6;
+    font-weight: 700;
+    color: #283593;
+    padding-left: 10px;
+    white-space: nowrap;
+}
+
+.target-auto-btn {
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
+.target-input {
+    background: #c5cae9 !important;
+    border-color: #7986cb !important;
+}
+
+.target-input:focus {
+    background: #e8eaf6 !important;
+    border-color: #3949ab !important;
+}
+
+.cell-target-ok {
+    background: #e8f5e9 !important;
+}
+
+.cell-target-over {
+    background: #ffebee !important;
+}
+
+.cell-target-under {
+    background: #fff3e0 !important;
+}
+
+.target-diff {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1;
+    margin-top: 1px;
+    color: #b71c1c;
+}
+
+.cell-target-over .target-diff {
+    color: #b71c1c;
+}
+
+.cell-target-under .target-diff {
+    color: #e65100;
+}
+
 a, .btn-link {
     color: #006bb7;
 }
