@@ -112,13 +112,33 @@
         _ => status
     };
 
+    private static string CsvField(string? value)
+    {
+        var escaped = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{escaped}\"";
+    }
+
     private async Task ExportCsvAsync()
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("テーマNo,テーマ名,受注区分,受注日,完了予定日,受注金額,状態");
+        sb.AppendLine(string.Join(",",
+            CsvField("テーマNo"),
+            CsvField("テーマ名"),
+            CsvField("受注区分"),
+            CsvField("受注日"),
+            CsvField("完了予定日"),
+            CsvField("受注金額"),
+            CsvField("状態")));
         foreach (var t in _themes)
         {
-            sb.AppendLine($"\"{t.ThemeNo}\",\"{t.Name}\",\"{t.OrderType}\",{t.OrderDate:yyyy/MM/dd},{t.EstimatedCompletionDate:yyyy/MM/dd},{t.OrderAmount},{StatusLabel(t.Status)}");
+            sb.AppendLine(string.Join(",",
+                CsvField(t.ThemeNo),
+                CsvField(t.Name),
+                CsvField(t.OrderType),
+                CsvField($"{t.OrderDate:yyyy/MM/dd}"),
+                CsvField($"{t.EstimatedCompletionDate:yyyy/MM/dd}"),
+                CsvField($"{t.OrderAmount}"),
+                CsvField(StatusLabel(t.Status))));
         }
         var filename = $"themes_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
         await JS.InvokeVoidAsync("downloadCsv", filename, sb.ToString());
