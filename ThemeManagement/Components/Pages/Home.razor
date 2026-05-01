@@ -134,20 +134,20 @@
     private async Task ExportEngineerCsvAsync()
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("エンジニア,等級,最大開発可能(h),割り当て合計(h),残余(h),稼働率(%)");
+        sb.Append("エンジニア,等級,最大開発可能(h),割り当て合計(h),残余(h),稼働率(%)").Append("\r\n");
         foreach (var e in _engineerSummaries)
-            sb.AppendLine($"\"{e.EngineerName}\",\"{e.GradeName}\",{e.MaxDevelopableHours:F1},{e.TotalAllocatedHours:F1},{e.RemainingHours:F1},{e.WorkRate:F1}");
+            sb.Append($"\"{e.EngineerName}\",\"{e.GradeName}\",{e.MaxDevelopableHours:F1},{e.TotalAllocatedHours:F1},{e.RemainingHours:F1},{e.WorkRate:F1}").Append("\r\n");
         await JS.InvokeVoidAsync("downloadCsv", $"engineer_summary_{_year}{_month:D2}_{DateTime.Now:HHmmss}.csv", sb.ToString());
     }
 
     private async Task ExportThemeCsvAsync()
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("テーマ名,受注金額,稼働コスト,前期繰越,合計コスト,消化率(%),残余金額,完了見込み");
+        sb.Append("テーマ名,受注金額,稼働コスト,前期繰越,合計コスト,消化率(%),残余金額,完了見込み").Append("\r\n");
         foreach (var t in _themeProgress)
         {
             var completion = t.EstimatedCompletionYear.HasValue ? $"{t.EstimatedCompletionYear}年{t.EstimatedCompletionMonth}月" : "-";
-            sb.AppendLine($"\"{t.ThemeName}\",{t.OrderAmount},{t.TotalAllocatedCost},{t.CarryOverAmount},{t.TotalAllocatedCost + t.CarryOverAmount},{t.ProgressRate:F1},{t.RemainingAmount},{completion}");
+            sb.Append($"\"{t.ThemeName}\",{t.OrderAmount},{t.TotalAllocatedCost},{t.CarryOverAmount},{t.TotalAllocatedCost + t.CarryOverAmount},{t.ProgressRate:F1},{t.RemainingAmount},{completion}").Append("\r\n");
         }
         await JS.InvokeVoidAsync("downloadCsv", $"theme_progress_{DateTime.Now:yyyyMMdd_HHmmss}.csv", sb.ToString());
     }
