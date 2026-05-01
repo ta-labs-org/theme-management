@@ -21,9 +21,7 @@ public class ThemeService : IThemeService
     {
         var query = _db.Themes.AsNoTracking().AsQueryable();
         if (activeOnly)
-            // 見積中・受注確定・進行中・一時停止を「アクティブ」とみなす
-            query = query.Where(t => t.Status == "Quoting" || t.Status == "Confirmed"
-                                  || t.Status == "Active" || t.Status == "OnHold");
+            query = query.Where(t => ThemeStatus.ActiveStatuses.Contains(t.Status));
         return query.OrderByDescending(t => t.OrderDate).ToListAsync();
     }
 
