@@ -119,8 +119,8 @@
             {
                 var severity = alert.Severity switch
                 {
-                    "error" => Severity.Error,
-                    "warning" => Severity.Warning,
+                    AlertSeverity.Error => Severity.Error,
+                    AlertSeverity.Warning => Severity.Warning,
                     _ => Severity.Info
                 };
                 <MudAlert Severity="@severity" Dense="true">
@@ -149,6 +149,6 @@
 
         _engineerSummaries = await engineerSummariesTask;
         _themeProgress = await themeProgressTask;
-        _alerts = await DashboardService.GetAlertsAsync(_year, _month, _engineerSummaries, _themeProgress);
+        _alerts = DashboardService.GetAlerts(_year, _month, _engineerSummaries, _themeProgress);
     }
 }

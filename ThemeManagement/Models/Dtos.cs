@@ -34,7 +34,8 @@ public record ThemeProgressDto(
     decimal ProgressRate,
     decimal RemainingAmount,
     int? EstimatedCompletionYear,
-    int? EstimatedCompletionMonth
+    int? EstimatedCompletionMonth,
+    DateOnly? EstimatedCompletionDate
 );
 
 public enum AlertSeverity
