@@ -53,10 +53,10 @@ app.MapGet("/api/backup/download", async (IConfiguration config, HttpContext con
 {
     var connStr = config.GetConnectionString("DefaultConnection") ?? "Data Source=theme_management.db";
     // SQLiteのパスを抽出
-    var dataSource = connStr.Split(';')
-        .Select(p => p.Trim())
-        .FirstOrDefault(p => p.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
-        ?.Substring("Data Source=".Length) ?? "theme_management.db";
+    var sqliteConnectionStringBuilder = new SqliteConnectionStringBuilder(connStr);
+    var dataSource = string.IsNullOrWhiteSpace(sqliteConnectionStringBuilder.DataSource)
+        ? "theme_management.db"
+        : sqliteConnectionStringBuilder.DataSource;
 
     if (!File.Exists(dataSource))
         return Results.NotFound("DBファイルが見つかりません");
