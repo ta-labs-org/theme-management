@@ -70,7 +70,8 @@ app.MapGet("/api/backup/download", async (IConfiguration config, HttpContext con
         using var conn = new SqliteConnection($"Data Source={dataSource}");
         await conn.OpenAsync();
         var cmd = conn.CreateCommand();
-        cmd.CommandText = $"VACUUM INTO '{tempFile}'";
+        var escapedTempFile = tempFile.Replace("'", "''");
+        cmd.CommandText = $"VACUUM INTO '{escapedTempFile}'";
         await cmd.ExecuteNonQueryAsync();
 
         var bytes = await File.ReadAllBytesAsync(tempFile);
