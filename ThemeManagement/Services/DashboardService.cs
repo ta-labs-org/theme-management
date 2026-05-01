@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ThemeManagement.Data;
+using ThemeManagement.Domain.Entities;
 using ThemeManagement.Models;
 
 namespace ThemeManagement.Services;
@@ -58,7 +59,7 @@ public class DashboardService : IDashboardService
     public async Task<List<ThemeProgressDto>> GetThemeProgressAsync()
     {
         var themes = await _db.Themes
-            .Where(t => t.Status == "Active")
+            .Where(t => ThemeStatus.ActiveStatuses.Contains(t.Status))
             .OrderByDescending(t => t.OrderDate)
             .ToListAsync();
 
