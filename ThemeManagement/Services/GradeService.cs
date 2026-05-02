@@ -29,17 +29,27 @@ public class GradeService : IGradeService
     {
         if (grade.Id == 0)
         {
-            _db.Grades.Add(grade);
-            await _db.SaveChangesAsync();
-            // 新規作成時の初期単価を履歴に記録
-            _db.GradePriceHistories.Add(new GradePriceHistory
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            try
             {
-                GradeId = grade.Id,
-                ValidFrom = DateOnly.FromDateTime(DateTime.Today),
-                UnitSalePrice = grade.UnitSalePrice,
-                UnitCostPrice = grade.UnitCostPrice
-            });
-            await _db.SaveChangesAsync();
+                _db.Grades.Add(grade);
+                await _db.SaveChangesAsync();
+                // 新規作成時の初期単価を履歴に記録
+                _db.GradePriceHistories.Add(new GradePriceHistory
+                {
+                    GradeId = grade.Id,
+                    ValidFrom = DateOnly.FromDateTime(DateTime.Today),
+                    UnitSalePrice = grade.UnitSalePrice,
+                    UnitCostPrice = grade.UnitCostPrice
+                });
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
         else
         {
