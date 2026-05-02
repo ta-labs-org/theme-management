@@ -503,7 +503,8 @@
 
                 try
                 {
-                    // バリデーションをスキップして保存する（自動割り当ては合計を保証するため個別チェック不要）
+                    // バリデーションをスキップして保存する（目標時間の按分割り当てでは稼働上限を
+                    // 意図的に超える場合があるため、個別エンジニアの上限チェックは行わない）
                     await AllocationService.UpsertAllocationNoValidationAsync(eng.Id, themeId, y, m, allocated);
                 }
                 catch (Exception ex)
