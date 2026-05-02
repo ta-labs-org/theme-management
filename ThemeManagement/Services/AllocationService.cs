@@ -18,6 +18,8 @@ public interface IAllocationService
     Task UpsertAllocationNoValidationAsync(int engineerId, int themeId, int year, int month, decimal hours);
     Task DeleteAllocationAsync(int id);
     Task<(int added, int updated)> BulkImportAllocationsAsync(IEnumerable<AllocationImportData> rows);
+    /// <summary>前月の割当てを指定月に一括コピーします（既存データは上書き）</summary>
+    Task<int> CopyFromPreviousMonthAsync(int themeId, int year, int month);
 }
 
 public class AllocationService : IAllocationService
@@ -219,5 +221,39 @@ public class AllocationService : IAllocationService
 
         await _db.SaveChangesAsync();
         return (added, updated);
+    }
+
+    public async Task<int> CopyFromPreviousMonthAsync(int themeId, int year, int month)
+    {
+        // 前月の計算
+        var prevDate = new DateTime(year, month, 1).AddMonths(-1);
+        int prevYear = prevDate.Year;
+        int prevMonth = prevDate.Month;
+
+        var prevAllocations = await _db.EngineerThemeAllocations
+            .Where(a => a.ThemeId == themeId && a.Year == prevYear && a.Month == prevMonth)
+            .ToListAsync();
+
+        if (prevAllocations.Count == 0) return 0;
+
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+
+        int copied = 0;
+        try
+        {
+            foreach (var prev in prevAllocations)
+            {
+                await UpsertAllocationAsync(prev.EngineerId, themeId, year, month, prev.AllocatedHours);
+                copied++;
+            }
+
+            await transaction.CommitAsync();
+            return copied;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 }
