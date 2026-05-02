@@ -309,15 +309,18 @@
             foreach (var co in carryOvers)
                 _carryOverMap[co.ThemeId] = co.CarryOverAmount;
 
-            // 月別合計目標稼働時間データ読み込み
+            // 月別合計目標稼働時間データ読み込み（下期は年度またぎのため年ごとに取得）
             _targetMap.Clear();
-            var periodYears = _periodMonths.Select(p => p.Year).Distinct().ToList();
-            var periodMonthNums = _periodMonths.Select(p => p.Month).ToList();
-            var targets = await Db.ThemeMonthlyTargets
-                .Where(t => periodYears.Contains(t.Year) && periodMonthNums.Contains(t.Month))
-                .ToListAsync();
-            foreach (var t in targets)
-                _targetMap[(t.ThemeId, t.Year, t.Month)] = t.TargetHours;
+            foreach (var grp in _periodMonths.GroupBy(p => p.Year))
+            {
+                var yr = grp.Key;
+                var months = grp.Select(p => p.Month).ToList();
+                var targets = await Db.ThemeMonthlyTargets
+                    .Where(t => t.Year == yr && months.Contains(t.Month))
+                    .ToListAsync();
+                foreach (var t in targets)
+                    _targetMap[(t.ThemeId, t.Year, t.Month)] = t.TargetHours;
+            }
 
             // 稼働日数データ読み込み（エンジニア上限チェック用）
             _baseWorkDays.Clear();
