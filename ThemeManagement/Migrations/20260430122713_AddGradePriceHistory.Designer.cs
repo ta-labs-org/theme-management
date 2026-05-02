@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ThemeManagement.Data;
 
@@ -10,9 +11,11 @@ using ThemeManagement.Data;
 namespace ThemeManagement.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260430122713_AddGradePriceHistory")]
+    partial class AddGradePriceHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.7");
@@ -235,10 +238,6 @@ namespace ThemeManagement.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Tags")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("ThemeNo")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -281,38 +280,6 @@ namespace ThemeManagement.Migrations
                         .IsUnique();
 
                     b.ToTable("ThemeCarryOvers");
-                });
-
-            modelBuilder.Entity("ThemeManagement.Domain.Entities.ThemeMonthlyTarget", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Month")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("TargetHours")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("ThemeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ThemeId", "Year", "Month")
-                        .IsUnique();
-
-                    b.ToTable("ThemeMonthlyTargets");
                 });
 
             modelBuilder.Entity("ThemeManagement.Domain.Entities.Engineer", b =>
@@ -368,17 +335,6 @@ namespace ThemeManagement.Migrations
                 });
 
             modelBuilder.Entity("ThemeManagement.Domain.Entities.ThemeCarryOver", b =>
-                {
-                    b.HasOne("ThemeManagement.Domain.Entities.Theme", "Theme")
-                        .WithMany()
-                        .HasForeignKey("ThemeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Theme");
-                });
-
-            modelBuilder.Entity("ThemeManagement.Domain.Entities.ThemeMonthlyTarget", b =>
                 {
                     b.HasOne("ThemeManagement.Domain.Entities.Theme", "Theme")
                         .WithMany()
