@@ -143,16 +143,15 @@ else
         if (cellDate < orderMonth || cellDate > endMonth)
             return ("gantt-before", "");
 
-        if (cellDate == endMonth)
-        {
-            if (endMonth < todayMonth && !isCompleted)
-                return ("gantt-overdue", "期限超過");
-            return ("gantt-deadline", "〆");
-        }
-
         if (isCompleted)
             return ("gantt-completed", "");
 
+        if (cellDate == endMonth)
+        {
+            if (endMonth < todayMonth)
+                return ("gantt-overdue", "期限超過");
+            return ("gantt-deadline", "〆");
+        }
         if (cellDate == todayMonth)
             return ("gantt-today", "●");
 
