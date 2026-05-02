@@ -19,8 +19,12 @@
                            Required="true" DateFormat="yyyy/MM/dd" />
             <MudNumericField T="decimal" @bind-Value="Theme.OrderAmount" Label="受注金額（円）" Min="1" Required="true" />
             <MudSelect T="string" @bind-Value="Theme.Status" Label="状態" Required="true">
+                <MudSelectItem T="string" Value="@ThemeStatus.Quoting">見積中</MudSelectItem>
+                <MudSelectItem T="string" Value="@ThemeStatus.Confirmed">受注確定</MudSelectItem>
                 <MudSelectItem T="string" Value="@ThemeStatus.Active">進行中</MudSelectItem>
+                <MudSelectItem T="string" Value="@ThemeStatus.OnHold">一時停止</MudSelectItem>
                 <MudSelectItem T="string" Value="@ThemeStatus.Completed">完了</MudSelectItem>
+                <MudSelectItem T="string" Value="@ThemeStatus.Lost">失注</MudSelectItem>
                 <MudSelectItem T="string" Value="@ThemeStatus.Cancelled">中止</MudSelectItem>
             </MudSelect>
             @if (Theme.Status == ThemeStatus.Completed)
@@ -28,6 +32,22 @@
                 <MudDatePicker Label="実完了日" Date="_actualDate" DateChanged="d => { _actualDate = d; Theme.ActualCompletionDate = d.HasValue ? DateOnly.FromDateTime(d.Value) : null; }"
                                DateFormat="yyyy/MM/dd" />
             }
+            <div>
+                <MudText Typo="Typo.caption" Class="mb-1">タグ</MudText>
+                <MudChipSet T="string" Class="mb-1">
+                    @foreach (var tag in _tags)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                 OnClose="() => RemoveTag(tag)">@tag</MudChip>
+                    }
+                </MudChipSet>
+                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                    <MudTextField @bind-Value="_newTag" Label="タグを追加" Immediate="true"
+                                  Placeholder="入力してEnter" OnKeyDown="OnTagKeyDown" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                   Color="Color.Primary" OnClick="AddTag" />
+                </MudStack>
+            </div>
         </MudStack>
     </DialogContent>
     <DialogActions>
@@ -43,12 +63,30 @@
     private DateTime? _orderDate;
     private DateTime? _estimatedDate;
     private DateTime? _actualDate;
+    private List<string> _tags = [];
+    private string _newTag = string.Empty;
 
     protected override void OnParametersSet()
     {
         _orderDate = Theme.OrderDate == default ? null : Theme.OrderDate.ToDateTime(TimeOnly.MinValue);
         _estimatedDate = Theme.EstimatedCompletionDate == default ? null : Theme.EstimatedCompletionDate.ToDateTime(TimeOnly.MinValue);
         _actualDate = Theme.ActualCompletionDate.HasValue ? Theme.ActualCompletionDate.Value.ToDateTime(TimeOnly.MinValue) : null;
+        _tags = [.. Theme.GetTagList()];
+    }
+
+    private void AddTag()
+    {
+        var tag = _newTag.Trim();
+        if (!string.IsNullOrEmpty(tag) && !_tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+            _tags.Add(tag);
+        _newTag = string.Empty;
+    }
+
+    private void RemoveTag(string tag) => _tags.Remove(tag);
+
+    private void OnTagKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") AddTag();
     }
 
     private async Task Submit()
@@ -63,6 +101,7 @@
             Snackbar.Add("受注金額は0より大きい値を入力してください", Severity.Warning);
             return;
         }
+        Theme.Tags = string.Join(",", _tags);
         try
         {
             await ThemeService.SaveAsync(Theme);

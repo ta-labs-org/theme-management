@@ -17,6 +17,9 @@ public interface IAllocationService
     Task UpsertAllocationAsync(int engineerId, int themeId, int year, int month, decimal hours);
     Task UpsertAllocationNoValidationAsync(int engineerId, int themeId, int year, int month, decimal hours);
     Task DeleteAllocationAsync(int id);
+    Task<(int added, int updated)> BulkImportAllocationsAsync(IEnumerable<AllocationImportData> rows);
+    /// <summary>前月の割当てを指定月に一括コピーします（既存データは上書き）</summary>
+    Task<int> CopyFromPreviousMonthAsync(int themeId, int year, int month);
 }
 
 public class AllocationService : IAllocationService
@@ -186,5 +189,71 @@ public class AllocationService : IAllocationService
             existing.AllocatedHours = hours;
         }
         await _db.SaveChangesAsync();
+    }
+
+    public async Task<(int added, int updated)> BulkImportAllocationsAsync(IEnumerable<AllocationImportData> rows)
+    {
+        int added = 0, updated = 0;
+
+        foreach (var row in rows)
+        {
+            var existing = await _db.EngineerThemeAllocations
+                .FirstOrDefaultAsync(a => a.EngineerId == row.EngineerId && a.ThemeId == row.ThemeId
+                                          && a.Year == row.Year && a.Month == row.Month);
+            if (existing == null)
+            {
+                _db.EngineerThemeAllocations.Add(new EngineerThemeAllocation
+                {
+                    EngineerId = row.EngineerId,
+                    ThemeId = row.ThemeId,
+                    Year = row.Year,
+                    Month = row.Month,
+                    AllocatedHours = row.Hours
+                });
+                added++;
+            }
+            else
+            {
+                existing.AllocatedHours = row.Hours;
+                updated++;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return (added, updated);
+    }
+
+    public async Task<int> CopyFromPreviousMonthAsync(int themeId, int year, int month)
+    {
+        // 前月の計算
+        var prevDate = new DateTime(year, month, 1).AddMonths(-1);
+        int prevYear = prevDate.Year;
+        int prevMonth = prevDate.Month;
+
+        var prevAllocations = await _db.EngineerThemeAllocations
+            .Where(a => a.ThemeId == themeId && a.Year == prevYear && a.Month == prevMonth)
+            .ToListAsync();
+
+        if (prevAllocations.Count == 0) return 0;
+
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+
+        int copied = 0;
+        try
+        {
+            foreach (var prev in prevAllocations)
+            {
+                await UpsertAllocationAsync(prev.EngineerId, themeId, year, month, prev.AllocatedHours);
+                copied++;
+            }
+
+            await transaction.CommitAsync();
+            return copied;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 }

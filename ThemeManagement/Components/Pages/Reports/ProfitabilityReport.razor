@@ -1,0 +1,157 @@
+@page "/report/profitability"
+@rendermode InteractiveServer
+@using ThemeManagement.Data
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@inject AppDbContext Db
+
+<PageTitle>テーマ別採算レポート</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">テーマ別採算レポート</MudText>
+
+<MudPaper Class="pa-3 mb-4" Elevation="1">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+        <MudCheckBox T="bool" @bind-Value="_showAll" Label="完了・中止も含める" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="LoadDataAsync">更新</MudButton>
+    </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+else if (_rows.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">表示できるデータがありません</MudAlert>
+}
+else
+{
+    <!-- グラフ -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">受注金額 vs 累計コスト（万円）</MudText>
+        <MudChart ChartType="ChartType.Bar"
+                  ChartSeries="@_series"
+                  XAxisLabels="@_labels"
+                  Width="100%" Height="350px"
+                  ChartOptions="@_chartOptions" />
+    </MudPaper>
+
+    <!-- テーブル -->
+    <MudTable Items="_rows" Dense="true" Hover="true" Elevation="2"
+              RowClassFunc="@((row, _) => row.ProgressRate > 100 ? "row-over" : row.ProgressRate > 80 ? "row-under" : "")">
+        <HeaderContent>
+            <MudTh>テーマ名</MudTh>
+            <MudTh>受注区分</MudTh>
+            <MudTh Style="text-align:right">受注金額(円)</MudTh>
+            <MudTh Style="text-align:right">累計売価コスト(円)</MudTh>
+            <MudTh Style="text-align:right">累計原価コスト(円)</MudTh>
+            <MudTh Style="text-align:right">消化率(%)</MudTh>
+            <MudTh Style="text-align:right">残余(円)</MudTh>
+            <MudTh>状態</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.ThemeName</MudTd>
+            <MudTd>@context.OrderType</MudTd>
+            <MudTd Style="text-align:right">@context.OrderAmount.ToString("N0")</MudTd>
+            <MudTd Style="text-align:right">@context.TotalSaleCost.ToString("N0")</MudTd>
+            <MudTd Style="text-align:right">@context.TotalCostPrice.ToString("N0")</MudTd>
+            <MudTd Style="text-align:right">
+                <MudText Color="@(context.ProgressRate > 100 ? Color.Error : context.ProgressRate > 80 ? Color.Warning : Color.Default)">
+                    @context.ProgressRate.ToString("F1")
+                </MudText>
+            </MudTd>
+            <MudTd Style="text-align:right">
+                <MudText Color="@(context.Remaining < 0 ? Color.Error : Color.Default)">
+                    @context.Remaining.ToString("N0")
+                </MudText>
+            </MudTd>
+            <MudTd>@context.Status</MudTd>
+        </RowTemplate>
+        <FooterContent>
+            <MudTd colspan="2"><strong>合計</strong></MudTd>
+            <MudTd Style="text-align:right"><strong>@_rows.Sum(r => r.OrderAmount).ToString("N0")</strong></MudTd>
+            <MudTd Style="text-align:right"><strong>@_rows.Sum(r => r.TotalSaleCost).ToString("N0")</strong></MudTd>
+            <MudTd Style="text-align:right"><strong>@_rows.Sum(r => r.TotalCostPrice).ToString("N0")</strong></MudTd>
+            <MudTd colspan="3"></MudTd>
+        </FooterContent>
+    </MudTable>
+}
+
+@code {
+    private bool _showAll = false;
+    private bool _loading = false;
+    private List<ProfitabilityRow> _rows = [];
+    private List<ChartSeries<double>> _series = [];
+    private string[] _labels = [];
+    private ChartOptions _chartOptions = new();
+
+    protected override async Task OnInitializedAsync() => await LoadDataAsync();
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var themes = await Db.Themes.AsNoTracking()
+                .Where(t => _showAll || t.Status == "Active")
+                .OrderByDescending(t => t.OrderDate)
+                .ToListAsync();
+
+            var themeIds = themes.Select(t => t.Id).ToList();
+            var allocs = await Db.EngineerThemeAllocations.AsNoTracking()
+                .Include(a => a.Engineer).ThenInclude(e => e.Grade)
+                .Where(a => themeIds.Contains(a.ThemeId))
+                .ToListAsync();
+            var allocsByThemeId = allocs.ToLookup(a => a.ThemeId);
+
+            _rows = themes.Select(t =>
+            {
+                var ta = allocsByThemeId[t.Id];
+                var saleCost = ta.Sum(a => a.AllocatedHours * a.Engineer.Grade.UnitSalePrice);
+                var costPrice = ta.Sum(a => a.AllocatedHours * a.Engineer.Grade.UnitCostPrice);
+                var rate = t.OrderAmount > 0 ? saleCost / t.OrderAmount * 100m : 0m;
+                var remaining = t.OrderAmount - saleCost;
+                var label = StatusLabel(t.Status);
+                return new ProfitabilityRow(t.Name, t.OrderType, t.OrderAmount, saleCost, costPrice, rate, remaining, label);
+            }).ToList();
+
+            // グラフデータ（万円単位）
+            _labels = _rows.Select(r => r.ThemeName.Length > 8 ? r.ThemeName[..8] + "…" : r.ThemeName).ToArray();
+            _series =
+            [
+                new ChartSeries<double> { Name = "受注金額", Data = _rows.Select(r => (double)(r.OrderAmount / 10000m)).ToArray() },
+                new ChartSeries<double> { Name = "累計売価コスト", Data = _rows.Select(r => (double)(r.TotalSaleCost / 10000m)).ToArray() },
+                new ChartSeries<double> { Name = "累計原価コスト", Data = _rows.Select(r => (double)(r.TotalCostPrice / 10000m)).ToArray() },
+            ];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "Active" => "進行中",
+        "Confirmed" => "受注確定",
+        "OnHold" => "一時停止",
+        "Completed" => "完了",
+        "Cancelled" => "中止",
+        "Lost" => "失注",
+        "Quoting" => "見積中",
+        _ => status
+    };
+
+    private record ProfitabilityRow(
+        string ThemeName,
+        string OrderType,
+        decimal OrderAmount,
+        decimal TotalSaleCost,
+        decimal TotalCostPrice,
+        decimal ProgressRate,
+        decimal Remaining,
+        string Status
+    );
+}
