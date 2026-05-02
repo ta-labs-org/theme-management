@@ -34,7 +34,7 @@ else
             <thead>
                 <tr>
                     <th class="gantt-name-col">テーマ名</th>
-                    <th class="gantt-name-col" style="min-width:70px">受注区分</th>
+                    <th class="gantt-type-col">受注区分</th>
                     @foreach (var (year, month) in _periodMonths)
                     {
                         <th class="gantt-month-col @(year == DateTime.Today.Year && month == DateTime.Today.Month ? "gantt-current-month" : "")">
@@ -52,7 +52,7 @@ else
                                 <a href="/themes/@theme.Id/allocation">@theme.Name</a>
                             </MudTooltip>
                         </td>
-                        <td class="gantt-name-col" style="font-size:0.82rem;color:#666">@theme.OrderType</td>
+                        <td class="gantt-type-col" style="font-size:0.82rem;color:#666">@theme.OrderType</td>
                         @foreach (var (year, month) in _periodMonths)
                         {
                             var cell = GetCellInfo(theme, year, month);
@@ -83,6 +83,7 @@ else
     .gantt-table th, .gantt-table td { border: 1px solid #e0e0e0; padding: 4px 6px; white-space: nowrap; }
     .gantt-table thead th { background: #f5f5f5; font-weight: 600; text-align: center; }
     .gantt-name-col { min-width: 130px; text-align: left; position: sticky; left: 0; background: white; z-index: 1; }
+    .gantt-type-col { min-width: 70px; text-align: left; position: sticky; left: 130px; background: white; z-index: 1; }
     .gantt-month-col { min-width: 55px; text-align: center; }
     .gantt-current-month { background: #e3f2fd !important; font-weight: 700; }
     .gantt-cell { text-align: center; }
