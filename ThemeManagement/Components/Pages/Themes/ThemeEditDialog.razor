@@ -19,11 +19,11 @@
                            Required="true" DateFormat="yyyy/MM/dd" />
             <MudNumericField T="decimal" @bind-Value="Theme.OrderAmount" Label="受注金額（円）" Min="1" Required="true" />
             <MudSelect T="string" @bind-Value="Theme.Status" Label="状態" Required="true">
-                <MudSelectItem T="string" Value="@("Active")">進行中</MudSelectItem>
-                <MudSelectItem T="string" Value="@("Completed")">完了</MudSelectItem>
-                <MudSelectItem T="string" Value="@("Cancelled")">中止</MudSelectItem>
+                <MudSelectItem T="string" Value="@ThemeStatus.Active">進行中</MudSelectItem>
+                <MudSelectItem T="string" Value="@ThemeStatus.Completed">完了</MudSelectItem>
+                <MudSelectItem T="string" Value="@ThemeStatus.Cancelled">中止</MudSelectItem>
             </MudSelect>
-            @if (Theme.Status == "Completed")
+            @if (Theme.Status == ThemeStatus.Completed)
             {
                 <MudDatePicker Label="実完了日" Date="_actualDate" DateChanged="d => { _actualDate = d; Theme.ActualCompletionDate = d.HasValue ? DateOnly.FromDateTime(d.Value) : null; }"
                                DateFormat="yyyy/MM/dd" />

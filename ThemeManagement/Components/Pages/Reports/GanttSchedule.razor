@@ -121,8 +121,7 @@ else
                 .ToList();
 
             _themes = await Db.Themes.AsNoTracking()
-                .Where(t => _showAll || t.Status == "Active" || t.Status == "Confirmed"
-                         || t.Status == "OnHold" || t.Status == "Quoting")
+                .Where(t => _showAll || t.Status == ThemeStatus.Active)
                 .OrderBy(t => t.OrderDate)
                 .ToListAsync();
         }
@@ -139,7 +138,7 @@ else
         var endMonth = new DateOnly(theme.EstimatedCompletionDate.Year, theme.EstimatedCompletionDate.Month, 1);
         var today = DateOnly.FromDateTime(DateTime.Today);
         var todayMonth = new DateOnly(today.Year, today.Month, 1);
-        bool isCompleted = theme.Status == "Completed" || theme.Status == "Cancelled";
+        bool isCompleted = theme.Status == ThemeStatus.Completed || theme.Status == ThemeStatus.Cancelled;
 
         if (cellDate < orderMonth || cellDate > endMonth)
             return ("gantt-before", "");

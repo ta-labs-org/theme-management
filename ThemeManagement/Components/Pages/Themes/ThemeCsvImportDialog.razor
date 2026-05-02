@@ -195,15 +195,15 @@
                 return (null, $"受注金額の形式が不正です（{cols[6].Trim()}）");
         }
 
-        var status = "Active";
+        var status = ThemeStatus.Active;
         if (cols.Count > 7 && !string.IsNullOrWhiteSpace(cols[7]))
         {
             var raw = cols[7].Trim();
             status = raw switch
             {
-                "Active" or "進行中" => "Active",
-                "Completed" or "完了" => "Completed",
-                "Cancelled" or "中止" => "Cancelled",
+                "Active" or "進行中" => ThemeStatus.Active,
+                "Completed" or "完了" => ThemeStatus.Completed,
+                "Cancelled" or "中止" => ThemeStatus.Cancelled,
                 _ => raw
             };
         }

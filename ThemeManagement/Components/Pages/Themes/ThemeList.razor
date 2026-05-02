@@ -69,7 +69,7 @@
         {
             OrderDate = DateOnly.FromDateTime(DateTime.Today),
             EstimatedCompletionDate = DateOnly.FromDateTime(DateTime.Today.AddMonths(3)),
-            Status = "Active"
+            Status = ThemeStatus.Active
         };
         var parameters = new DialogParameters<ThemeEditDialog> { { x => x.Theme, theme } };
         var dialog = await DialogService.ShowAsync<ThemeEditDialog>("テーマ登録", parameters);
@@ -95,17 +95,17 @@
 
     private static Color StatusColor(string status) => status switch
     {
-        "Active" => Color.Success,
-        "Completed" => Color.Info,
-        "Cancelled" => Color.Default,
+        ThemeStatus.Active => Color.Success,
+        ThemeStatus.Completed => Color.Info,
+        ThemeStatus.Cancelled => Color.Default,
         _ => Color.Default
     };
 
     private static string StatusLabel(string status) => status switch
     {
-        "Active" => "進行中",
-        "Completed" => "完了",
-        "Cancelled" => "中止",
+        ThemeStatus.Active => "進行中",
+        ThemeStatus.Completed => "完了",
+        ThemeStatus.Cancelled => "中止",
         _ => status
     };
 }
