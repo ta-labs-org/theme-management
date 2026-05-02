@@ -1,9 +1,9 @@
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using ThemeManagement.Components;
 using ThemeManagement.Data;
-using ThemeManagement.Domain.Entities;
+using ThemeManagement.Infrastructure;
 using ThemeManagement.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,8 +12,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddRazorPages();
-
 // MudBlazor
 builder.Services.AddMudServices();
 
@@ -21,31 +19,13 @@ builder.Services.AddMudServices();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ASP.NET Core Identity
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-{
-    options.Password.RequireDigit = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequireUppercase = false;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequiredLength = 8;
-    options.SignIn.RequireConfirmedAccount = false;
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-    options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.AllowedForNewUsers = true;
-})
-.AddEntityFrameworkStores<AppDbContext>()
-.AddDefaultTokenProviders();
+// Azure App Service Easy Auth — authentication is handled by Easy Auth at the infrastructure level.
+// This handler reads the X-MS-CLIENT-PRINCIPAL header forwarded by App Service and constructs
+// the ClaimsPrincipal, including Entra ID App Role claims used for authorization below.
+builder.Services.AddAuthentication("EasyAuth")
+    .AddScheme<AuthenticationSchemeOptions, EasyAuthAuthenticationHandler>("EasyAuth", null);
 
-builder.Services.ConfigureApplicationCookie(options =>
-{
-    options.LoginPath = "/account/login";
-    options.LogoutPath = "/account/logout";
-    options.AccessDeniedPath = "/account/login";
-    options.Cookie.HttpOnly = true;
-    options.ExpireTimeSpan = TimeSpan.FromHours(8);
-    options.SlidingExpiration = true;
-});
+builder.Services.AddAuthorization();
 
 builder.Services.AddCascadingAuthenticationState();
 
@@ -61,16 +41,11 @@ builder.Services.AddSingleton<ICapacitySettings, CapacitySettings>();
 
 var app = builder.Build();
 
-// Apply migrations and seed initial data
+// Apply migrations automatically on startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
-
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-    await SeedDataAsync(roleManager, userManager, config);
 }
 
 // Configure the HTTP request pipeline.
@@ -88,45 +63,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
-app.MapRazorPages();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
-
-static async Task SeedDataAsync(RoleManager<IdentityRole> roleManager, UserManager<ApplicationUser> userManager, IConfiguration config)
-{
-    // Create roles
-    string[] roles = ["Admin", "User"];
-    foreach (var role in roles)
-    {
-        if (!await roleManager.RoleExistsAsync(role))
-            await roleManager.CreateAsync(new IdentityRole(role));
-    }
-
-    // Create default admin user from configuration
-    // NOTE: Override SeedAdmin:Email and SeedAdmin:Password via environment variables or secrets in production
-    var adminEmail = config["SeedAdmin:Email"];
-    var adminPassword = config["SeedAdmin:Password"];
-
-    if (string.IsNullOrWhiteSpace(adminEmail) || string.IsNullOrWhiteSpace(adminPassword))
-    {
-        var logger = userManager.Logger;
-        logger.LogWarning("SeedAdmin:Email and SeedAdmin:Password are not configured. Skipping default admin user creation.");
-        return;
-    }
-
-    if (await userManager.FindByEmailAsync(adminEmail) == null)
-    {
-        var admin = new ApplicationUser
-        {
-            UserName = adminEmail,
-            Email = adminEmail,
-            DisplayName = "管理者",
-            EmailConfirmed = true
-        };
-        var result = await userManager.CreateAsync(admin, adminPassword);
-        if (result.Succeeded)
-            await userManager.AddToRoleAsync(admin, "Admin");
-    }
-}

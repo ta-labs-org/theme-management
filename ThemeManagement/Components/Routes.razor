@@ -5,8 +5,10 @@
         <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
             <NotAuthorized>
                 @{
-                    var returnUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-                    NavigationManager.NavigateTo($"/account/login?returnUrl=/{Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+                    // On Azure App Service, Easy Auth intercepts unauthenticated requests before they
+                    // reach the app. This fallback handles the case where the app runs outside Azure
+                    // (e.g., local development without Easy Auth) or when a user lacks required roles.
+                    NavigationManager.NavigateTo("/.auth/login/aad", forceLoad: true);
                 }
             </NotAuthorized>
         </AuthorizeRouteView>

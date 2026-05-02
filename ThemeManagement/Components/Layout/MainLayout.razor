@@ -13,11 +13,8 @@
         <AuthorizeView>
             <Authorized>
                 <MudText Typo="Typo.body2" Class="mr-2">@context.User.Identity?.Name</MudText>
-                <form method="post" action="/account/logout" style="display:inline">
-                    <AntiforgeryToken />
-                    <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit"
-                                   ButtonType="ButtonType.Submit" Title="ログアウト" />
-                </form>
+                <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit"
+                               Href="/.auth/logout" Title="ログアウト" />
             </Authorized>
         </AuthorizeView>
     </MudAppBar>
