@@ -19,15 +19,36 @@
     <MudCheckBox T="bool" Value="_showAll" ValueChanged="@(async v => { _showAll = v; await LoadAsync(); })" Label="完了・中止も表示" />
 </MudStack>
 
-<MudTable Items="_themes" Dense="true" Hover="true" Elevation="2">
+@if (_allTags.Count > 0)
+{
+    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="mb-3" Style="flex-wrap:wrap">
+        <MudText Typo="Typo.body2" Class="mr-1">タグ絞り込み:</MudText>
+        <MudChip T="string" Size="Size.Small"
+                 Color="@(_filterTag == null ? Color.Primary : Color.Default)"
+                 Variant="@(_filterTag == null ? Variant.Filled : Variant.Outlined)"
+                 OnClick="@(() => _filterTag = null)">すべて</MudChip>
+        @foreach (var tag in _allTags)
+        {
+            var t = tag;
+            <MudChip T="string" Size="Size.Small"
+                     Color="@(_filterTag == t ? Color.Primary : Color.Default)"
+                     Variant="@(_filterTag == t ? Variant.Filled : Variant.Outlined)"
+                     OnClick="@(() => _filterTag = (_filterTag == t ? null : t))">@t</MudChip>
+        }
+    </MudStack>
+}
+
+<MudTable Items="_themes" Dense="true" Hover="true" Elevation="2"
+          Filter="FilterFunc" SortLabel="ソート">
     <HeaderContent>
-        <MudTh>テーマNo</MudTh>
-        <MudTh>テーマ名</MudTh>
+        <MudTh><MudTableSortLabel SortBy="_sortByThemeNo">テーマNo</MudTableSortLabel></MudTh>
+        <MudTh><MudTableSortLabel SortBy="_sortByName">テーマ名</MudTableSortLabel></MudTh>
         <MudTh>受注区分</MudTh>
         <MudTh>受注日</MudTh>
         <MudTh>完了予定日</MudTh>
         <MudTh Style="text-align:right">受注金額(円)</MudTh>
         <MudTh>状態</MudTh>
+        <MudTh>タグ</MudTh>
         <MudTh>操作</MudTh>
     </HeaderContent>
     <RowTemplate>
@@ -43,6 +64,13 @@
             </MudChip>
         </MudTd>
         <MudTd>
+            @foreach (var tag in context.GetTagList())
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                         OnClick="@(() => _filterTag = tag)" Style="cursor:pointer">@tag</MudChip>
+            }
+        </MudTd>
+        <MudTd>
             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
             <MudIconButton Icon="@Icons.Material.Filled.BarChart" Size="Size.Small" Color="Color.Info"
                            Href="@($"/themes/{context.Id}/allocation")" />
@@ -52,12 +80,30 @@
 </MudTable>
 
 @code {
+    private static readonly Func<Theme, object> _sortByThemeNo = x => x.ThemeNo;
+    private static readonly Func<Theme, object> _sortByName = x => x.Name;
+
     private List<Theme> _themes = [];
     private bool _showAll = false;
+    private string? _filterTag = null;
+    private List<string> _allTags = [];
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
-    private async Task LoadAsync() => _themes = await ThemeService.GetAllAsync(!_showAll);
+    private async Task LoadAsync()
+    {
+        _themes = await ThemeService.GetAllAsync(!_showAll);
+        _allTags = _themes
+            .SelectMany(t => t.GetTagList())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order()
+            .ToList();
+        if (_filterTag != null && !_allTags.Contains(_filterTag, StringComparer.OrdinalIgnoreCase))
+            _filterTag = null;
+    }
+
+    private bool FilterFunc(Theme t) =>
+        _filterTag == null || t.GetTagList().Contains(_filterTag, StringComparer.OrdinalIgnoreCase);
 
     private async Task OpenCsvImportDialog()
     {
@@ -88,7 +134,8 @@
             OrderDate = theme.OrderDate,
             EstimatedCompletionDate = theme.EstimatedCompletionDate,
             ActualCompletionDate = theme.ActualCompletionDate,
-            OrderAmount = theme.OrderAmount, Status = theme.Status
+            OrderAmount = theme.OrderAmount, Status = theme.Status,
+            Tags = theme.Tags
         };
         var parameters = new DialogParameters<ThemeEditDialog> { { x => x.Theme, copy } };
         var dialog = await DialogService.ShowAsync<ThemeEditDialog>("テーマ編集", parameters);
