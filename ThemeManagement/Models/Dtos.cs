@@ -1,5 +1,7 @@
 namespace ThemeManagement.Models;
 
+public record AllocationImportData(int EngineerId, int ThemeId, int Year, int Month, decimal Hours);
+
 public record AllocationRowDto(
     int Id,
     int EngineerId,
