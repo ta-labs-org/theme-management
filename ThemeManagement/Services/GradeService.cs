@@ -35,13 +35,7 @@ public class GradeService : IGradeService
                 _db.Grades.Add(grade);
                 await _db.SaveChangesAsync();
                 // 新規作成時の初期単価を履歴に記録
-                _db.GradePriceHistories.Add(new GradePriceHistory
-                {
-                    GradeId = grade.Id,
-                    ValidFrom = DateOnly.FromDateTime(DateTime.Today),
-                    UnitSalePrice = grade.UnitSalePrice,
-                    UnitCostPrice = grade.UnitCostPrice
-                });
+                AddPriceHistoryEntry(grade.Id, grade.UnitSalePrice, grade.UnitCostPrice);
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
             }
@@ -65,17 +59,22 @@ public class GradeService : IGradeService
                 if (priceChanged)
                 {
                     // 単価変更時に履歴を追加
-                    _db.GradePriceHistories.Add(new GradePriceHistory
-                    {
-                        GradeId = grade.Id,
-                        ValidFrom = DateOnly.FromDateTime(DateTime.Today),
-                        UnitSalePrice = grade.UnitSalePrice,
-                        UnitCostPrice = grade.UnitCostPrice
-                    });
+                    AddPriceHistoryEntry(grade.Id, grade.UnitSalePrice, grade.UnitCostPrice);
                 }
             }
             await _db.SaveChangesAsync();
         }
+    }
+
+    private void AddPriceHistoryEntry(int gradeId, decimal unitSalePrice, decimal unitCostPrice)
+    {
+        _db.GradePriceHistories.Add(new GradePriceHistory
+        {
+            GradeId = gradeId,
+            ValidFrom = DateOnly.FromDateTime(DateTime.Today),
+            UnitSalePrice = unitSalePrice,
+            UnitCostPrice = unitCostPrice
+        });
     }
 
     public async Task DeleteAsync(int id)
