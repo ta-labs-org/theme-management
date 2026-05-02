@@ -138,7 +138,7 @@ else
         var endMonth = new DateOnly(theme.EstimatedCompletionDate.Year, theme.EstimatedCompletionDate.Month, 1);
         var today = DateOnly.FromDateTime(DateTime.Today);
         var todayMonth = new DateOnly(today.Year, today.Month, 1);
-        bool isCompleted = theme.Status == "Completed" || theme.Status == "Cancelled" || theme.Status == "Lost";
+        bool isCompleted = theme.Status == "Completed" || theme.Status == "Cancelled";
 
         if (cellDate < orderMonth || cellDate > endMonth)
             return ("gantt-before", "");
