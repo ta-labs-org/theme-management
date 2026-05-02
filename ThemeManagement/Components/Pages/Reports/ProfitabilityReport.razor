@@ -95,7 +95,7 @@ else
         try
         {
             var themes = await Db.Themes.AsNoTracking()
-                .Where(t => _showAll || t.Status == "Active")
+                .Where(t => _showAll || ThemeStatus.ActiveStatuses.Contains(t.Status))
                 .OrderByDescending(t => t.OrderDate)
                 .ToListAsync();
 
@@ -134,13 +134,13 @@ else
 
     private static string StatusLabel(string status) => status switch
     {
-        "Active" => "進行中",
-        "Confirmed" => "受注確定",
-        "OnHold" => "一時停止",
-        "Completed" => "完了",
-        "Cancelled" => "中止",
-        "Lost" => "失注",
-        "Quoting" => "見積中",
+        ThemeStatus.Quoting => "見積中",
+        ThemeStatus.Confirmed => "受注確定",
+        ThemeStatus.Active => "進行中",
+        ThemeStatus.OnHold => "一時停止",
+        ThemeStatus.Completed => "完了",
+        ThemeStatus.Lost => "失注",
+        ThemeStatus.Cancelled => "中止",
         _ => status
     };
 
