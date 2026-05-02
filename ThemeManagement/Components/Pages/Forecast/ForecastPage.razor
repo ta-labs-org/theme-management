@@ -140,7 +140,7 @@
                         @foreach (var theme in _themes)
                         {
                             var themeEngineers = _engineers.ToList();
-                            var themeId2 = theme.Id;
+                            var currentThemeId = theme.Id;
                             <!-- 合計（目標）行 -->
                             <tr class="row-theme-target">
                                 <td rowspan="@(themeEngineers.Count + 1)" class="cell-group-name">
@@ -155,28 +155,28 @@
                                     <MudIconButton Icon="@Icons.Material.Filled.AutoFixHigh"
                                                    Size="Size.Small" Color="Color.Primary"
                                                    aria-label="目標時間をエンジニアへ自動割り当て"
-                                                   OnClick="@(async () => await AutoAssignAsync(themeId2))"
+                                                   OnClick="@(async () => await AutoAssignAsync(currentThemeId))"
                                                    Class="target-auto-btn" />
                                 </td>
                                 @foreach (var (y, m) in _periodMonths)
                                 {
                                     var cy = y; var cm = m;
-                                    var target = GetTarget(themeId2, cy, cm);
-                                    var actual = GetThemeMonthTotal(themeId2, cy, cm);
+                                    var target = GetTarget(currentThemeId, cy, cm);
+                                    var actual = GetThemeMonthTotal(currentThemeId, cy, cm);
                                     var diff = actual - target;
-                                    string checkCss = target == 0 ? "" : diff == 0 ? "cell-target-ok" : diff > 0 ? "cell-target-over" : "cell-target-under";
+                                    string checkCss = GetTargetCellCss(target, diff);
                                     <td class="cell-input @checkCss">
                                         <input type="number" class="alloc-input target-input" min="0" step="5"
                                                value="@((int)target)"
                                                title="@(target > 0 ? $"実績: {actual:F0}h / 差: {diff:+0;-0;0}h" : "")"
-                                               @onchange="@(async e => await OnTargetChanged(themeId2, cy, cm, e.Value?.ToString()))" />
+                                               @onchange="@(async e => await OnTargetChanged(currentThemeId, cy, cm, e.Value?.ToString()))" />
                                         @if (target > 0 && diff != 0)
                                         {
                                             <div class="target-diff">@($"{diff:+0;-0}h")</div>
                                         }
                                     </td>
                                 }
-                                <td class="cell-total">@FormatHours(_periodMonths.Sum(p => GetTarget(themeId2, p.Year, p.Month)))</td>
+                                <td class="cell-total">@FormatHours(_periodMonths.Sum(p => GetTarget(currentThemeId, p.Year, p.Month)))</td>
                             </tr>
                             @for (int ei = 0; ei < themeEngineers.Count; ei++)
                             {
@@ -266,6 +266,8 @@
 
     // Key: ThemeId -> 前期繰越工数
     private Dictionary<int, decimal> _carryOverMap = new();
+
+    private const decimal HourRoundingIncrement = 5m;
 
     private static int GetDefaultFiscalYear()
     {
@@ -431,6 +433,14 @@
 
     private static string FormatHours(decimal h) => h == 0 ? "-" : $"{h:F0}h";
 
+    /// <summary>目標との差分に応じたセルCSSクラスを返す</summary>
+    private static string GetTargetCellCss(decimal target, decimal diff)
+    {
+        if (target == 0) return "";
+        if (diff == 0) return "cell-target-ok";
+        return diff > 0 ? "cell-target-over" : "cell-target-under";
+    }
+
     // ===== 月別合計目標稼働時間 =====
 
     private decimal GetTarget(int themeId, int year, int month)
@@ -438,7 +448,7 @@
 
     private async Task OnTargetChanged(int themeId, int year, int month, string? valueStr)
     {
-        if (!decimal.TryParse(valueStr, System.Globalization.NumberStyles.Any,
+        if (!decimal.TryParse(valueStr, System.Globalization.NumberStyles.Number,
                 System.Globalization.CultureInfo.InvariantCulture, out var value) || value < 0)
             value = 0;
 
@@ -486,13 +496,14 @@
             foreach (var (eng, cap) in capacities)
             {
                 decimal allocated = totalCap > 0
-                    ? Math.Round(target * (cap / totalCap) / 5m) * 5m  // 5h刻みに丸め
-                    : Math.Round(target / _engineers.Count / 5m) * 5m;
+                    ? Math.Round(target * (cap / totalCap) / HourRoundingIncrement) * HourRoundingIncrement
+                    : Math.Round(target / _engineers.Count / HourRoundingIncrement) * HourRoundingIncrement;
 
                 _allocMap[(eng.Id, themeId, y, m)] = allocated;
 
                 try
                 {
+                    // バリデーションをスキップして保存する（自動割り当ては合計を保証するため個別チェック不要）
                     await AllocationService.UpsertAllocationNoValidationAsync(eng.Id, themeId, y, m, allocated);
                 }
                 catch (Exception ex)
