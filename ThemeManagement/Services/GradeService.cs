@@ -96,5 +96,6 @@ public class GradeService : IGradeService
             .AsNoTracking()
             .Where(h => h.GradeId == gradeId)
             .OrderByDescending(h => h.ValidFrom)
+            .ThenByDescending(h => h.Id)
             .ToListAsync();
 }
