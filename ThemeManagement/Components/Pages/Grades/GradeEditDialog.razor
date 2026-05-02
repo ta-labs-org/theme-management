@@ -47,6 +47,8 @@
     {
         if (Grade.Id != 0)
             _histories = await GradeService.GetPriceHistoriesAsync(Grade.Id);
+        else
+            _histories = [];
     }
 
     private async Task Submit()
