@@ -45,6 +45,7 @@ public class ThemeService : IThemeService
                 existing.ActualCompletionDate = theme.ActualCompletionDate;
                 existing.OrderAmount = theme.OrderAmount;
                 existing.Status = theme.Status;
+                existing.Tags = theme.Tags;
             }
         }
         await _db.SaveChangesAsync();
@@ -66,6 +67,7 @@ public class ThemeService : IThemeService
                 existing.ActualCompletionDate = theme.ActualCompletionDate;
                 existing.OrderAmount = theme.OrderAmount;
                 existing.Status = theme.Status;
+                existing.Tags = theme.Tags;
                 updated++;
             }
             else
