@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ThemeManagement.Data;
 
@@ -10,9 +11,11 @@ using ThemeManagement.Data;
 namespace ThemeManagement.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260501122305_AddThemeMonthlyTarget")]
+    partial class AddThemeMonthlyTarget
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.7");
@@ -145,34 +148,6 @@ namespace ThemeManagement.Migrations
                     b.ToTable("Grades");
                 });
 
-            modelBuilder.Entity("ThemeManagement.Domain.Entities.GradePriceHistory", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("GradeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("UnitCostPrice")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("UnitSalePrice")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly>("ValidFrom")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GradeId");
-
-                    b.ToTable("GradePriceHistories");
-                });
-
             modelBuilder.Entity("ThemeManagement.Domain.Entities.MonthlyWorkDays", b =>
                 {
                     b.Property<int>("Id")
@@ -232,10 +207,6 @@ namespace ThemeManagement.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Tags")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -356,17 +327,6 @@ namespace ThemeManagement.Migrations
                     b.Navigation("Theme");
                 });
 
-            modelBuilder.Entity("ThemeManagement.Domain.Entities.GradePriceHistory", b =>
-                {
-                    b.HasOne("ThemeManagement.Domain.Entities.Grade", "Grade")
-                        .WithMany("PriceHistories")
-                        .HasForeignKey("GradeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Grade");
-                });
-
             modelBuilder.Entity("ThemeManagement.Domain.Entities.ThemeCarryOver", b =>
                 {
                     b.HasOne("ThemeManagement.Domain.Entities.Theme", "Theme")
@@ -399,8 +359,6 @@ namespace ThemeManagement.Migrations
             modelBuilder.Entity("ThemeManagement.Domain.Entities.Grade", b =>
                 {
                     b.Navigation("Engineers");
-
-                    b.Navigation("PriceHistories");
                 });
 
             modelBuilder.Entity("ThemeManagement.Domain.Entities.Theme", b =>
