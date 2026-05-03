@@ -16,11 +16,13 @@
 </head>
 
 <body>
-    <Routes />
+    <CascadingAuthenticationState>
+        <Routes />
+    </CascadingAuthenticationState>
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
-    <script src="@Assets["app.js"]"></script>
+    <script src="js/downloadHelper.js"></script>
 </body>
 
 </html>

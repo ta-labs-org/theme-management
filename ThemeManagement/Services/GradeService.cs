@@ -11,6 +11,7 @@ public interface IGradeService
     Task SaveAsync(Grade grade);
     Task DeleteAsync(int id);
     Task<bool> IsUsedAsync(int id);
+    Task<List<GradePriceHistory>> GetPriceHistoriesAsync(int gradeId);
 }
 
 public class GradeService : IGradeService
@@ -27,18 +28,53 @@ public class GradeService : IGradeService
     public async Task SaveAsync(Grade grade)
     {
         if (grade.Id == 0)
-            _db.Grades.Add(grade);
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                _db.Grades.Add(grade);
+                await _db.SaveChangesAsync();
+                // 新規作成時の初期単価を履歴に記録
+                AddPriceHistoryEntry(grade.Id, grade.UnitSalePrice, grade.UnitCostPrice);
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
         else
         {
             var existing = await _db.Grades.FindAsync(grade.Id);
             if (existing != null)
             {
+                bool priceChanged = existing.UnitSalePrice != grade.UnitSalePrice
+                                 || existing.UnitCostPrice != grade.UnitCostPrice;
                 existing.Name = grade.Name;
                 existing.UnitSalePrice = grade.UnitSalePrice;
                 existing.UnitCostPrice = grade.UnitCostPrice;
+
+                if (priceChanged)
+                {
+                    // 単価変更時に履歴を追加
+                    AddPriceHistoryEntry(grade.Id, grade.UnitSalePrice, grade.UnitCostPrice);
+                }
             }
+            await _db.SaveChangesAsync();
         }
-        await _db.SaveChangesAsync();
+    }
+
+    private void AddPriceHistoryEntry(int gradeId, decimal unitSalePrice, decimal unitCostPrice)
+    {
+        _db.GradePriceHistories.Add(new GradePriceHistory
+        {
+            GradeId = gradeId,
+            ValidFrom = DateOnly.FromDateTime(DateTime.Today),
+            UnitSalePrice = unitSalePrice,
+            UnitCostPrice = unitCostPrice
+        });
     }
 
     public async Task DeleteAsync(int id)
@@ -53,4 +89,12 @@ public class GradeService : IGradeService
 
     public Task<bool> IsUsedAsync(int id) =>
         _db.Engineers.AnyAsync(e => e.GradeId == id);
+
+    public Task<List<GradePriceHistory>> GetPriceHistoriesAsync(int gradeId) =>
+        _db.GradePriceHistories
+            .AsNoTracking()
+            .Where(h => h.GradeId == gradeId)
+            .OrderByDescending(h => h.ValidFrom)
+            .ThenByDescending(h => h.Id)
+            .ToListAsync();
 }

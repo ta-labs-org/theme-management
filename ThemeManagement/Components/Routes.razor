@@ -2,7 +2,20 @@
 
 <Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                @{
+                    // On Azure App Service, Easy Auth intercepts unauthenticated requests before they
+                    // reach the app. This fallback handles the case where the app runs outside Azure
+                    // (e.g., local development without Easy Auth) or when a user lacks required roles.
+                    NavigationManager.NavigateTo("/.auth/login/aad", forceLoad: true);
+                }
+            </NotAuthorized>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
 </Router>
+
+@code {
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+}
