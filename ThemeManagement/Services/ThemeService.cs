@@ -21,7 +21,7 @@ public class ThemeService : IThemeService
     {
         var query = _db.Themes.AsNoTracking().AsQueryable();
         if (activeOnly)
-            query = query.Where(t => t.Status == "Active");
+            query = query.Where(t => ThemeStatus.ActiveStatuses.Contains(t.Status));
         return query.OrderByDescending(t => t.OrderDate).ToListAsync();
     }
 
@@ -45,6 +45,7 @@ public class ThemeService : IThemeService
                 existing.ActualCompletionDate = theme.ActualCompletionDate;
                 existing.OrderAmount = theme.OrderAmount;
                 existing.Status = theme.Status;
+                existing.Tags = theme.Tags;
             }
         }
         await _db.SaveChangesAsync();
@@ -66,6 +67,7 @@ public class ThemeService : IThemeService
                 existing.ActualCompletionDate = theme.ActualCompletionDate;
                 existing.OrderAmount = theme.OrderAmount;
                 existing.Status = theme.Status;
+                existing.Tags = theme.Tags;
                 updated++;
             }
             else
