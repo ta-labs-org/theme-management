@@ -21,13 +21,14 @@
                 ※ テーマNoが既存のものと一致した場合は上書き更新します
             </MudAlert>
 
-            <MudFileUpload T="IBrowserFile" @ref="_fileUpload" FilesChanged="OnFileSelected" Accept=".csv" MaximumFileCount="1">
-                <ActivatorContent>
+            <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".csv" MaximumFileCount="1">
+                <CustomContent Context="upload">
                     <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.FolderOpen"
-                               Color="Color.Primary" FullWidth="true">
+                               Color="Color.Primary" FullWidth="true"
+                               OnClick="@upload.OpenFilePickerAsync">
                         CSVファイルを選択
                     </MudButton>
-                </ActivatorContent>
+                </CustomContent>
             </MudFileUpload>
 
             @if (_fileName != null)
@@ -104,7 +105,6 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
-    private MudFileUpload<IBrowserFile>? _fileUpload;
     private string? _fileName;
     private bool _parsed;
     private bool _importing;
@@ -195,15 +195,15 @@
                 return (null, $"受注金額の形式が不正です（{cols[6].Trim()}）");
         }
 
-        var status = "Active";
+        var status = ThemeStatus.Active;
         if (cols.Count > 7 && !string.IsNullOrWhiteSpace(cols[7]))
         {
             var raw = cols[7].Trim();
             status = raw switch
             {
-                "Active" or "進行中" => "Active",
-                "Completed" or "完了" => "Completed",
-                "Cancelled" or "中止" => "Cancelled",
+                "Active" or "進行中" => ThemeStatus.Active,
+                "Completed" or "完了" => ThemeStatus.Completed,
+                "Cancelled" or "中止" => ThemeStatus.Cancelled,
                 _ => raw
             };
         }

@@ -229,9 +229,115 @@ html, body {
     letter-spacing: 0.01em;
 }
 
+/* テーマ月別合計目標行 */
+.row-theme-target td {
+    background: #e8eaf6;
+    border-top: 2px solid #7986cb;
+    border-bottom: 1px solid #9fa8da;
+}
+
+.cell-target-label {
+    background: #e8eaf6;
+    font-weight: 700;
+    color: #283593;
+    padding-left: 10px;
+    white-space: nowrap;
+}
+
+.target-auto-btn {
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
+.target-input {
+    background: #c5cae9 !important;
+    border-color: #7986cb !important;
+}
+
+.target-input:focus {
+    background: #e8eaf6 !important;
+    border-color: #3949ab !important;
+}
+
+.cell-target-ok {
+    background: #e8f5e9 !important;
+}
+
+.cell-target-over {
+    background: #ffebee !important;
+}
+
+.cell-target-under {
+    background: #fff3e0 !important;
+}
+
+.target-diff {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1;
+    margin-top: 1px;
+}
+
+.cell-target-over .target-diff {
+    color: #b71c1c;
+}
+
+.cell-target-under .target-diff {
+    color: #e65100;
+}
+
 a, .btn-link {
     color: #006bb7;
 }
+
+/* ===== 印刷・PDF出力 ===== */
+@media print {
+    /* ナビゲーション・コントロールを非表示 */
+    .mud-drawer,
+    .mud-appbar,
+    .no-print {
+        display: none !important;
+    }
+
+    /* メインコンテンツを全幅に拡張 */
+    .mud-main-content {
+        margin-left: 0 !important;
+        padding: 0 !important;
+    }
+
+    .mud-container {
+        max-width: 100% !important;
+        padding: 8px !important;
+    }
+
+    /* MudPaper の影を非表示にする */
+    .mud-paper {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+    }
+
+    /* テーブルのページまたぎ制御 */
+    .forecast-table {
+        page-break-inside: auto;
+        font-size: 8pt !important;
+    }
+
+    .forecast-table tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+    }
+
+    /* 予測コンテナを縦に積む（横並び → 縦並び） */
+    .forecast-container {
+        flex-direction: column !important;
+    }
+
+    .forecast-panel {
+        min-width: 100% !important;
+    }
+}
+
 
 /* ===== 稼働日管理 複数月テーブル ===== */
 .workday-table-wrapper {
