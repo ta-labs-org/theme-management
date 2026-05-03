@@ -1,5 +1,6 @@
 @page "/engineers"
 @rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject IEngineerService EngineerService
 @inject IGradeService GradeService
 @inject ISnackbar Snackbar
@@ -33,14 +34,22 @@
             </MudChip>
         </MudTd>
         <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+            <AuthorizeView Roles="Admin" Context="authCtx">
+                <Authorized>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+                </Authorized>
+            </AuthorizeView>
             <MudIconButton Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" Color="Color.Info"
                            Href="@($"/engineers/{context.Id}/allocation")" />
-            @if (context.IsActive)
-            {
-                <MudIconButton Icon="@Icons.Material.Filled.PersonOff" Size="Size.Small" Color="Color.Warning"
-                               OnClick="() => DeactivateAsync(context)" />
-            }
+            <AuthorizeView Roles="Admin" Context="authCtx2">
+                <Authorized>
+                    @if (context.IsActive)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.PersonOff" Size="Size.Small" Color="Color.Warning"
+                                       OnClick="() => DeactivateAsync(context)" />
+                    }
+                </Authorized>
+            </AuthorizeView>
         </MudTd>
     </RowTemplate>
     <NoRecordsContent><MudText>エンジニアが登録されていません</MudText></NoRecordsContent>

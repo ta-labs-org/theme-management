@@ -1,5 +1,6 @@
 @page "/themes"
 @rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject IThemeService ThemeService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
