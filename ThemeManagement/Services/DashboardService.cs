@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ThemeManagement.Data;
+using ThemeManagement.Domain.Entities;
 using ThemeManagement.Models;
 
 namespace ThemeManagement.Services;
@@ -9,6 +10,7 @@ public interface IDashboardService
     Task<List<EngineerWorkSummaryDto>> GetEngineerSummaryAsync(int year, int month);
     Task<List<ThemeProgressDto>> GetThemeProgressAsync();
     Task<DashboardKpiDto> GetKpiSummaryAsync(int year, int month);
+    List<AlertItemDto> GetAlerts(int year, int month, List<EngineerWorkSummaryDto> summaries, List<ThemeProgressDto> themeProgress);
 }
 
 public class DashboardService : IDashboardService
@@ -58,7 +60,7 @@ public class DashboardService : IDashboardService
     public async Task<List<ThemeProgressDto>> GetThemeProgressAsync()
     {
         var themes = await _db.Themes
-            .Where(t => t.Status == "Active")
+            .Where(t => ThemeStatus.ActiveStatuses.Contains(t.Status))
             .OrderByDescending(t => t.OrderDate)
             .ToListAsync();
 
@@ -108,7 +110,8 @@ public class DashboardService : IDashboardService
             result.Add(new ThemeProgressDto(
                 theme.Id, theme.Name, theme.Status,
                 theme.OrderAmount, allocCost, carryOver, progressRate, remaining,
-                estYear, estMonth));
+                estYear, estMonth,
+                theme.EstimatedCompletionDate));
         }
 
         return result;
@@ -117,7 +120,7 @@ public class DashboardService : IDashboardService
     public async Task<DashboardKpiDto> GetKpiSummaryAsync(int year, int month)
     {
         var activeEngineerCount = await _db.Engineers.CountAsync(e => e.IsActive);
-        var activeThemeCount = await _db.Themes.CountAsync(t => t.Status == "Active");
+        var activeThemeCount = await _db.Themes.CountAsync(t => ThemeStatus.ActiveStatuses.Contains(t.Status));
 
         var engineerSummaries = await GetEngineerSummaryAsync(year, month);
         var billableEngineers = engineerSummaries.Where(e => e.MaxDevelopableHours > 0).ToList();
@@ -138,5 +141,34 @@ public class DashboardService : IDashboardService
         });
 
         return new DashboardKpiDto(activeEngineerCount, activeThemeCount, avgWorkRate, totalMonthlyCost);
+    }
+
+    public List<AlertItemDto> GetAlerts(int year, int month, List<EngineerWorkSummaryDto> summaries, List<ThemeProgressDto> themeProgress)
+    {
+        var alerts = new List<AlertItemDto>();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        // -- エンジニア稼働アラート --
+        foreach (var e in summaries)
+        {
+            if (e.MaxDevelopableHours > 0 && e.WorkRate > 120)
+                alerts.Add(new AlertItemDto(AlertSeverity.Error, "稼働超過", $"{e.EngineerName} の稼働率が {e.WorkRate:F0}% です（{year}/{month}）"));
+            else if (e.MaxDevelopableHours > 0 && e.WorkRate > 100)
+                alerts.Add(new AlertItemDto(AlertSeverity.Warning, "稼働超過", $"{e.EngineerName} の稼働率が {e.WorkRate:F0}% です（{year}/{month}）"));
+            else if (e.MaxDevelopableHours > 0 && e.TotalAllocatedHours == 0)
+                alerts.Add(new AlertItemDto(AlertSeverity.Warning, "未割当", $"{e.EngineerName} に{year}/{month}の工数が割り当てられていません"));
+        }
+
+        // -- テーマアラート --
+        foreach (var t in themeProgress)
+        {
+            if (t.ProgressRate > 100)
+                alerts.Add(new AlertItemDto(AlertSeverity.Error, "予算超過", $"テーマ「{t.ThemeName}」が予算超過です（消化率 {t.ProgressRate:F0}%）"));
+
+            if (t.EstimatedCompletionDate.HasValue && t.EstimatedCompletionDate.Value < today)
+                alerts.Add(new AlertItemDto(AlertSeverity.Warning, "完了期限超過", $"テーマ「{t.ThemeName}」の完了予定日（{t.EstimatedCompletionDate.Value:yyyy/MM/dd}）を過ぎています"));
+        }
+
+        return alerts.OrderBy(a => a.Severity).ToList();
     }
 }

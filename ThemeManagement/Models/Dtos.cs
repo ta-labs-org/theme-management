@@ -7,6 +7,8 @@ public record DashboardKpiDto(
     decimal TotalMonthlyCost
 );
 
+public record AllocationImportData(int EngineerId, int ThemeId, int Year, int Month, decimal Hours);
+
 public record AllocationRowDto(
     int Id,
     int EngineerId,
@@ -41,5 +43,19 @@ public record ThemeProgressDto(
     decimal ProgressRate,
     decimal RemainingAmount,
     int? EstimatedCompletionYear,
-    int? EstimatedCompletionMonth
+    int? EstimatedCompletionMonth,
+    DateOnly? EstimatedCompletionDate
+);
+
+public enum AlertSeverity
+{
+    Error,
+    Warning,
+    Info
+}
+
+public record AlertItemDto(
+    AlertSeverity Severity,
+    string Category,
+    string Message
 );

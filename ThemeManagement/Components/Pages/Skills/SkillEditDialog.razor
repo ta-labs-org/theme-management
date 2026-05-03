@@ -1,0 +1,43 @@
+@inject ISkillService SkillService
+@inject ISnackbar Snackbar
+@inject ILogger<SkillEditDialog> Logger
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="Skill.Name" Label="スキル名" Required="true" Immediate="true" />
+            <MudTextField @bind-Value="Skill.Category" Label="カテゴリ（例：言語、フレームワーク、資格）" Immediate="true" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Skill Skill { get; set; } = new();
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(Skill.Name))
+        {
+            Snackbar.Add("スキル名を入力してください", Severity.Warning);
+            return;
+        }
+        try
+        {
+            await SkillService.SaveAsync(Skill);
+            Snackbar.Add("保存しました", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "スキルの保存中にエラーが発生しました");
+            Snackbar.Add("保存中にエラーが発生しました", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -12,4 +12,5 @@ public class Engineer
 
     public ICollection<EngineerMonthlyAdjustment> MonthlyAdjustments { get; set; } = new List<EngineerMonthlyAdjustment>();
     public ICollection<EngineerThemeAllocation> ThemeAllocations { get; set; } = new List<EngineerThemeAllocation>();
+    public ICollection<EngineerSkill> Skills { get; set; } = new List<EngineerSkill>();
 }

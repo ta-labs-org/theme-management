@@ -81,6 +81,37 @@ namespace ThemeManagement.Migrations
                     b.ToTable("EngineerMonthlyAdjustments");
                 });
 
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.EngineerSkill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EngineerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SkillId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SkillId");
+
+                    b.HasIndex("EngineerId", "SkillId")
+                        .IsUnique();
+
+                    b.ToTable("EngineerSkills");
+                });
+
             modelBuilder.Entity("ThemeManagement.Domain.Entities.EngineerThemeAllocation", b =>
                 {
                     b.Property<int>("Id")
@@ -145,6 +176,34 @@ namespace ThemeManagement.Migrations
                     b.ToTable("Grades");
                 });
 
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.GradePriceHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("GradeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("UnitCostPrice")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnitSalePrice")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GradeId");
+
+                    b.ToTable("GradePriceHistories");
+                });
+
             modelBuilder.Entity("ThemeManagement.Domain.Entities.MonthlyWorkDays", b =>
                 {
                     b.Property<int>("Id")
@@ -172,6 +231,61 @@ namespace ThemeManagement.Migrations
                         .IsUnique();
 
                     b.ToTable("MonthlyWorkDays");
+                });
+
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.NotificationSetting", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastNotifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NotificationSettings");
+                });
+
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.Skill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Skills");
                 });
 
             modelBuilder.Entity("ThemeManagement.Domain.Entities.Theme", b =>
@@ -204,6 +318,10 @@ namespace ThemeManagement.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tags")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -251,6 +369,69 @@ namespace ThemeManagement.Migrations
                     b.ToTable("ThemeCarryOvers");
                 });
 
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.ThemeMonthlyTarget", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("TargetHours")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ThemeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ThemeId", "Year", "Month")
+                        .IsUnique();
+
+                    b.ToTable("ThemeMonthlyTargets");
+                });
+
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.ThemeRequiredSkill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RequiredLevel")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SkillId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ThemeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SkillId");
+
+                    b.HasIndex("ThemeId", "SkillId")
+                        .IsUnique();
+
+                    b.ToTable("ThemeRequiredSkills");
+                });
+
             modelBuilder.Entity("ThemeManagement.Domain.Entities.Engineer", b =>
                 {
                     b.HasOne("ThemeManagement.Domain.Entities.Grade", "Grade")
@@ -273,6 +454,25 @@ namespace ThemeManagement.Migrations
                     b.Navigation("Engineer");
                 });
 
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.EngineerSkill", b =>
+                {
+                    b.HasOne("ThemeManagement.Domain.Entities.Engineer", "Engineer")
+                        .WithMany("Skills")
+                        .HasForeignKey("EngineerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ThemeManagement.Domain.Entities.Skill", "Skill")
+                        .WithMany("EngineerSkills")
+                        .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Engineer");
+
+                    b.Navigation("Skill");
+                });
+
             modelBuilder.Entity("ThemeManagement.Domain.Entities.EngineerThemeAllocation", b =>
                 {
                     b.HasOne("ThemeManagement.Domain.Entities.Engineer", "Engineer")
@@ -292,6 +492,17 @@ namespace ThemeManagement.Migrations
                     b.Navigation("Theme");
                 });
 
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.GradePriceHistory", b =>
+                {
+                    b.HasOne("ThemeManagement.Domain.Entities.Grade", "Grade")
+                        .WithMany("PriceHistories")
+                        .HasForeignKey("GradeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Grade");
+                });
+
             modelBuilder.Entity("ThemeManagement.Domain.Entities.ThemeCarryOver", b =>
                 {
                     b.HasOne("ThemeManagement.Domain.Entities.Theme", "Theme")
@@ -303,9 +514,41 @@ namespace ThemeManagement.Migrations
                     b.Navigation("Theme");
                 });
 
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.ThemeMonthlyTarget", b =>
+                {
+                    b.HasOne("ThemeManagement.Domain.Entities.Theme", "Theme")
+                        .WithMany()
+                        .HasForeignKey("ThemeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Theme");
+                });
+
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.ThemeRequiredSkill", b =>
+                {
+                    b.HasOne("ThemeManagement.Domain.Entities.Skill", "Skill")
+                        .WithMany("ThemeRequiredSkills")
+                        .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ThemeManagement.Domain.Entities.Theme", "Theme")
+                        .WithMany("RequiredSkills")
+                        .HasForeignKey("ThemeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Skill");
+
+                    b.Navigation("Theme");
+                });
+
             modelBuilder.Entity("ThemeManagement.Domain.Entities.Engineer", b =>
                 {
                     b.Navigation("MonthlyAdjustments");
+
+                    b.Navigation("Skills");
 
                     b.Navigation("ThemeAllocations");
                 });
@@ -313,11 +556,22 @@ namespace ThemeManagement.Migrations
             modelBuilder.Entity("ThemeManagement.Domain.Entities.Grade", b =>
                 {
                     b.Navigation("Engineers");
+
+                    b.Navigation("PriceHistories");
+                });
+
+            modelBuilder.Entity("ThemeManagement.Domain.Entities.Skill", b =>
+                {
+                    b.Navigation("EngineerSkills");
+
+                    b.Navigation("ThemeRequiredSkills");
                 });
 
             modelBuilder.Entity("ThemeManagement.Domain.Entities.Theme", b =>
                 {
                     b.Navigation("EngineerAllocations");
+
+                    b.Navigation("RequiredSkills");
                 });
 #pragma warning restore 612, 618
         }

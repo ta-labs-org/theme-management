@@ -32,7 +32,8 @@ public class DashboardSettingsService : IDashboardSettingsService
     [
         new() { Id = "kpi", DisplayName = "KPIカード", IsVisible = true, Order = 0 },
         new() { Id = "engineer-summary", DisplayName = "エンジニア稼働サマリ", IsVisible = true, Order = 1 },
-        new() { Id = "theme-progress", DisplayName = "テーマ進捗サマリ", IsVisible = true, Order = 2 }
+        new() { Id = "theme-progress", DisplayName = "テーマ進捗サマリ", IsVisible = true, Order = 2 },
+        new() { Id = "alerts", DisplayName = "警告・アラート", IsVisible = true, Order = 3 }
     ];
 
     public static readonly List<string> DefaultPinnedKpis = ["project-count", "work-rate", "monthly-cost"];
