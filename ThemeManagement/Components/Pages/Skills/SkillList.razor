@@ -1,5 +1,6 @@
 @page "/skills"
 @rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject ISkillService SkillService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService

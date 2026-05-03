@@ -41,6 +41,8 @@
             </AuthorizeView>
             <MudIconButton Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" Color="Color.Info"
                            Href="@($"/engineers/{context.Id}/allocation")" />
+            <MudIconButton Icon="@Icons.Material.Filled.Psychology" Size="Size.Small" Color="Color.Secondary"
+                           OnClick="() => OpenSkillsDialog(context)" />
             <AuthorizeView Roles="Admin" Context="authCtx2">
                 <Authorized>
                     @if (context.IsActive)

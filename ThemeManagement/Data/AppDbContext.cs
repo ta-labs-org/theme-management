@@ -15,7 +15,11 @@ public class AppDbContext : DbContext
     public DbSet<EngineerThemeAllocation> EngineerThemeAllocations => Set<EngineerThemeAllocation>();
     public DbSet<ThemeCarryOver> ThemeCarryOvers => Set<ThemeCarryOver>();
     public DbSet<GradePriceHistory> GradePriceHistories => Set<GradePriceHistory>();
+    public DbSet<NotificationSetting> NotificationSettings => Set<NotificationSetting>();
     public DbSet<ThemeMonthlyTarget> ThemeMonthlyTargets => Set<ThemeMonthlyTarget>();
+    public DbSet<Skill> Skills => Set<Skill>();
+    public DbSet<EngineerSkill> EngineerSkills => Set<EngineerSkill>();
+    public DbSet<ThemeRequiredSkill> ThemeRequiredSkills => Set<ThemeRequiredSkill>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +37,20 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<ThemeMonthlyTarget>()
             .HasIndex(e => new { e.ThemeId, e.Year, e.Month }).IsUnique();
+
+        modelBuilder.Entity<EngineerSkill>()
+            .HasIndex(e => new { e.EngineerId, e.SkillId }).IsUnique();
+
+        modelBuilder.Entity<ThemeRequiredSkill>()
+            .HasIndex(e => new { e.ThemeId, e.SkillId }).IsUnique();
+
+        modelBuilder.Entity<EngineerSkill>()
+            .Property(e => e.Level)
+            .HasColumnType("INTEGER");
+
+        modelBuilder.Entity<ThemeRequiredSkill>()
+            .Property(e => e.RequiredLevel)
+            .HasColumnType("INTEGER");
     }
 
     public override int SaveChanges()
