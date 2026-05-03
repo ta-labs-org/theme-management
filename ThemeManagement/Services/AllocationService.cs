@@ -26,10 +26,13 @@ public class AllocationService : IAllocationService
 {
     private readonly AppDbContext _db;
     private readonly ICapacitySettings _capacitySettings;
-    public AllocationService(AppDbContext db, ICapacitySettings capacitySettings)
+    private readonly INotificationService _notificationService;
+
+    public AllocationService(AppDbContext db, ICapacitySettings capacitySettings, INotificationService notificationService)
     {
         _db = db;
         _capacitySettings = capacitySettings;
+        _notificationService = notificationService;
     }
 
     public Task<List<AllocationRowDto>> GetByEngineerAsync(int engineerId, int year, int month) =>
@@ -137,6 +140,7 @@ public class AllocationService : IAllocationService
         }
 
         await _db.SaveChangesAsync();
+        await _notificationService.TrySendRealtimeAlertsAsync();
     }
 
     public async Task DeleteAllocationAsync(int id)

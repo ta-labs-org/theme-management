@@ -44,6 +44,7 @@ builder.Services.AddScoped<IGradeService, GradeService>();
 builder.Services.AddScoped<IEngineerService, EngineerService>();
 builder.Services.AddScoped<IWorkDayService, WorkDayService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IAllocationService, AllocationService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddSingleton<IJapaneseBusinessDayService, JapaneseBusinessDayService>();

@@ -1,0 +1,159 @@
+@page "/notification-settings"
+@rendermode InteractiveServer
+@inject INotificationService NotificationService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>通知設定</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">メール・通知アラート設定</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.subtitle1" Class="mb-3">通知先メールアドレス</MudText>
+    <MudText Typo="Typo.body2" Class="mb-3" Color="Color.Default">
+        稼働率超過・受注金額超過・期限超過が発生した際に指定アドレスへメール通知します。
+    </MudText>
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenAddDialog" Class="mb-4">通知先を追加</MudButton>
+
+    <MudTable Items="_settings" Dense="true" Hover="true" Elevation="0">
+        <HeaderContent>
+            <MudTh>メールアドレス</MudTh>
+            <MudTh>通知頻度</MudTh>
+            <MudTh>有効</MudTh>
+            <MudTh>最終通知日時</MudTh>
+            <MudTh>操作</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Email</MudTd>
+            <MudTd>@FrequencyLabel(context.Frequency)</MudTd>
+            <MudTd>
+                @if (context.IsActive)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Default" Size="Size.Small" />
+                }
+            </MudTd>
+            <MudTd>
+                @(context.LastNotifiedAt.HasValue
+                    ? context.LastNotifiedAt.Value.ToString("yyyy/MM/dd HH:mm")
+                    : "未送信")
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="() => OpenEditDialog(context)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="() => DeleteAsync(context)" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText>通知先が登録されていません</MudText></NoRecordsContent>
+    </MudTable>
+</MudPaper>
+
+<MudPaper Class="pa-4" Elevation="1">
+    <MudText Typo="Typo.subtitle1" Class="mb-2">手動テスト送信</MudText>
+    <MudText Typo="Typo.body2" Class="mb-3">
+        現在のアラート状況を全アクティブ通知先に今すぐ送信します。
+    </MudText>
+    <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Send"
+               OnClick="SendNowAsync" Disabled="_sending">
+        @if (_sending)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            <text>送信中...</text>
+        }
+        else
+        {
+            <text>今すぐ送信</text>
+        }
+    </MudButton>
+</MudPaper>
+
+@code {
+    private List<NotificationSetting> _settings = [];
+    private bool _sending;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+        => _settings = await NotificationService.GetAllAsync();
+
+    private static string FrequencyLabel(string frequency) => frequency switch
+    {
+        "Realtime" => "リアルタイム",
+        "Daily"    => "日次",
+        "Weekly"   => "週次",
+        _          => frequency
+    };
+
+    private async Task OpenAddDialog()
+    {
+        var setting = new NotificationSetting();
+        var parameters = new DialogParameters<NotificationSettingEditDialog>
+        {
+            { x => x.Setting, setting }
+        };
+        var dialog = await DialogService.ShowAsync<NotificationSettingEditDialog>("通知先追加", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenEditDialog(NotificationSetting setting)
+    {
+        var copy = new NotificationSetting
+        {
+            Id = setting.Id,
+            Email = setting.Email,
+            Frequency = setting.Frequency,
+            IsActive = setting.IsActive,
+            LastNotifiedAt = setting.LastNotifiedAt
+        };
+        var parameters = new DialogParameters<NotificationSettingEditDialog>
+        {
+            { x => x.Setting, copy }
+        };
+        var dialog = await DialogService.ShowAsync<NotificationSettingEditDialog>("通知先編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteAsync(NotificationSetting setting)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, $"「{setting.Email}」を削除しますか？" },
+            { x => x.ConfirmText, "削除" },
+            { x => x.ConfirmColor, Color.Error }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("削除確認", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await NotificationService.DeleteAsync(setting.Id);
+            Snackbar.Add("削除しました", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task SendNowAsync()
+    {
+        _sending = true;
+        try
+        {
+            await NotificationService.SendAlertEmailsAsync();
+            Snackbar.Add("アラートメールの送信処理を実行しました", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"送信エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+}
