@@ -1,0 +1,106 @@
+@page "/skills"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject ISkillService SkillService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>スキルマスタ</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">スキルマスタ</MudText>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+           OnClick="OpenAddDialog" Class="mb-4">新規追加</MudButton>
+
+<MudTable Items="_skills" Dense="true" Hover="true" Elevation="2" GroupBy="_groupDefinition">
+    <ColGroup>
+        <col style="width:40%;" />
+        <col style="width:30%;" />
+        <col style="width:30%;" />
+    </ColGroup>
+    <HeaderContent>
+        <MudTh>スキル名</MudTh>
+        <MudTh>カテゴリ</MudTh>
+        <MudTh>操作</MudTh>
+    </HeaderContent>
+    <GroupHeaderTemplate>
+        <MudTh colspan="3">
+            <MudText Typo="Typo.subtitle2">
+                @(context.Key?.ToString() ?? "（未分類）")
+            </MudText>
+        </MudTh>
+    </GroupHeaderTemplate>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>@(context.Category ?? "—")</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                           OnClick="() => DeleteAsync(context)" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>スキルが登録されていません</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private List<Skill> _skills = [];
+
+    private readonly TableGroupDefinition<Skill> _groupDefinition = new()
+    {
+        GroupName = "カテゴリ",
+        Indentation = false,
+        Expandable = true,
+        IsInitiallyExpanded = true,
+        Selector = s => s.Category ?? "（未分類）"
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _skills = await SkillService.GetAllAsync();
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters<SkillEditDialog> { { x => x.Skill, new Skill() } };
+        var dialog = await DialogService.ShowAsync<SkillEditDialog>("スキル追加", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenEditDialog(Skill skill)
+    {
+        var copy = new Skill { Id = skill.Id, Name = skill.Name, Category = skill.Category };
+        var parameters = new DialogParameters<SkillEditDialog> { { x => x.Skill, copy } };
+        var dialog = await DialogService.ShowAsync<SkillEditDialog>("スキル編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Skill skill)
+    {
+        if (await SkillService.IsUsedAsync(skill.Id))
+        {
+            Snackbar.Add("このスキルはエンジニアまたはテーマに使用されているため削除できません", Severity.Warning);
+            return;
+        }
+        var confirmed = await ConfirmAsync("削除確認", $"「{skill.Name}」を削除しますか？", "削除");
+        if (confirmed)
+        {
+            await SkillService.DeleteAsync(skill.Id);
+            Snackbar.Add("削除しました", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText = "OK")
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, message },
+            { x => x.ConfirmText, confirmText },
+            { x => x.ConfirmColor, Color.Error }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(title, parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false };
+    }
+}

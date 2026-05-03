@@ -1,0 +1,141 @@
+@inject ISkillService SkillService
+@inject ISnackbar Snackbar
+@inject ILogger<EngineerSkillsDialog> Logger
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="4">
+            <MudText Typo="Typo.subtitle1"><strong>@EngineerName</strong> のスキル・資格</MudText>
+
+            @if (_engineerSkills.Any())
+            {
+                <MudTable Items="_engineerSkills" Dense="true" Hover="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>スキル名</MudTh>
+                        <MudTh>カテゴリ</MudTh>
+                        <MudTh>レベル</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Skill.Name</MudTd>
+                        <MudTd>@(context.Skill.Category ?? "—")</MudTd>
+                        <MudTd>
+                            <MudRating SelectedValue="context.Level" SelectedValueChanged="async v => await UpdateLevelAsync(context, v)" MaxValue="5" />
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                           OnClick="() => DeleteAsync(context)" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">スキルが登録されていません</MudText>
+            }
+
+            <MudDivider />
+
+            <MudText Typo="Typo.subtitle2">スキルを追加</MudText>
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                <MudSelect T="int" @bind-Value="_newSkillId" Label="スキル" Style="min-width:220px;">
+                    @foreach (var s in _availableSkills)
+                    {
+                        <MudSelectItem T="int" Value="@s.Id">@s.Name @(s.Category != null ? $"（{s.Category}）" : "")</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="int" @bind-Value="_newLevel" Label="レベル" Style="min-width:100px;">
+                    @for (int i = 1; i <= 5; i++)
+                    {
+                        var level = i;
+                        <MudSelectItem T="int" Value="@level">@level</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddSkillAsync"
+                           Disabled="@(_availableSkills.Count == 0)">追加</MudButton>
+            </MudStack>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">閉じる</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int EngineerId { get; set; }
+    [Parameter] public string EngineerName { get; set; } = string.Empty;
+
+    private List<EngineerSkill> _engineerSkills = [];
+    private List<Skill> _allSkills = [];
+    private List<Skill> _availableSkills = [];
+    private int _newSkillId;
+    private int _newLevel = 3;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allSkills = await SkillService.GetAllAsync();
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _engineerSkills = await SkillService.GetEngineerSkillsAsync(EngineerId);
+        var assignedIds = _engineerSkills.Select(es => es.SkillId).ToHashSet();
+        _availableSkills = _allSkills.Where(s => !assignedIds.Contains(s.Id)).ToList();
+        _newSkillId = _availableSkills.FirstOrDefault()?.Id ?? 0;
+    }
+
+    private async Task AddSkillAsync()
+    {
+        if (_newSkillId == 0)
+        {
+            Snackbar.Add("スキルを選択してください", Severity.Warning);
+            return;
+        }
+        try
+        {
+            await SkillService.SaveEngineerSkillAsync(new EngineerSkill
+            {
+                EngineerId = EngineerId,
+                SkillId = _newSkillId,
+                Level = _newLevel
+            });
+            await RefreshAsync();
+            Snackbar.Add("追加しました", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "スキル追加中にエラーが発生しました");
+            Snackbar.Add("追加中にエラーが発生しました", Severity.Error);
+        }
+    }
+
+    private async Task UpdateLevelAsync(EngineerSkill es, int newLevel)
+    {
+        try
+        {
+            await SkillService.SaveEngineerSkillAsync(new EngineerSkill
+            {
+                EngineerId = es.EngineerId,
+                SkillId = es.SkillId,
+                Level = newLevel
+            });
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "スキルレベル更新中にエラーが発生しました");
+            Snackbar.Add("更新中にエラーが発生しました", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(EngineerSkill es)
+    {
+        await SkillService.DeleteEngineerSkillAsync(es.Id);
+        await RefreshAsync();
+        Snackbar.Add("削除しました", Severity.Success);
+    }
+
+    private void Close() => MudDialog.Close(DialogResult.Ok(true));
+}

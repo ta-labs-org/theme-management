@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -47,6 +48,7 @@ builder.Services.AddScoped<IThemeService, ThemeService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IAllocationService, AllocationService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<ISkillService, SkillService>();
 builder.Services.AddSingleton<IJapaneseBusinessDayService, JapaneseBusinessDayService>();
 builder.Services.AddSingleton<ICapacitySettings, CapacitySettings>();
 builder.Services.AddScoped<IReportPdfService, ReportPdfService>();

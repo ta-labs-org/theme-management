@@ -21,4 +21,5 @@ public class Theme
             : Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public ICollection<EngineerThemeAllocation> EngineerAllocations { get; set; } = new List<EngineerThemeAllocation>();
+    public ICollection<ThemeRequiredSkill> RequiredSkills { get; set; } = new List<ThemeRequiredSkill>();
 }

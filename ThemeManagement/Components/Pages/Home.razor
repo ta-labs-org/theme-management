@@ -195,5 +195,5 @@
         await JS.InvokeVoidAsync("downloadCsv", $"theme_progress_{DateTime.Now:yyyyMMdd_HHmmss}.csv", sb.ToString());
     }
 
-    private async Task PrintPage() => await JSRuntime.InvokeVoidAsync("printPage");
+    private async Task PrintPage() => await JS.InvokeVoidAsync("printPage");
 }
