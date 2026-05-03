@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject IDashboardService DashboardService
+@inject IJSRuntime JS
 
 <PageTitle>ダッシュボード</PageTitle>
 
@@ -15,7 +16,11 @@
     </MudStack>
 </MudPaper>
 
-<MudText Typo="Typo.h6" Class="mb-2">エンジニア稼働サマリ（@(_year)年@(_month)月）</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+    <MudText Typo="Typo.h6">エンジニア稼働サマリ（@(_year)年@(_month)月）</MudText>
+    <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportEngineerCsvAsync">CSVエクスポート</MudButton>
+</MudStack>
 <MudTable Items="_engineerSummaries" Dense="true" Hover="true" Elevation="2" Class="mb-6"
           RowClassFunc="@((row, _) => row.MaxDevelopableHours > 0 && row.TotalAllocatedHours > row.MaxDevelopableHours ? "row-over"
                                     : row.MaxDevelopableHours > 0 && row.TotalAllocatedHours == 0 ? "row-unassigned"
@@ -61,7 +66,11 @@
     <NoRecordsContent><MudText>データがありません</MudText></NoRecordsContent>
 </MudTable>
 
-<MudText Typo="Typo.h6" Class="mb-2">テーマ進捗サマリ（アクティブ案件）</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+    <MudText Typo="Typo.h6">テーマ進捗サマリ（アクティブ案件）</MudText>
+    <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportThemeCsvAsync">CSVエクスポート</MudButton>
+</MudStack>
 <MudTable Items="_themeProgress" Dense="true" Hover="true" Elevation="2"
           RowClassFunc="@((row, _) => row.ProgressRate > 100 ? "row-over" : "")">
     <HeaderContent>
@@ -109,17 +118,74 @@
     <NoRecordsContent><MudText>アクティブなテーマがありません</MudText></NoRecordsContent>
 </MudTable>
 
+@if (_alerts.Count > 0)
+{
+    <MudText Typo="Typo.h6" Class="mb-2 mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Color="Color.Warning" Class="mr-1" />警告・アラート
+    </MudText>
+    <MudPaper Class="pa-3 mb-4" Elevation="2">
+        <MudStack Spacing="2">
+            @foreach (var alert in _alerts)
+            {
+                var severity = alert.Severity switch
+                {
+                    AlertSeverity.Error => Severity.Error,
+                    AlertSeverity.Warning => Severity.Warning,
+                    _ => Severity.Info
+                };
+                <MudAlert Severity="@severity" Dense="true">
+                    <MudText><strong>[@alert.Category]</strong> @alert.Message</MudText>
+                </MudAlert>
+            }
+        </MudStack>
+    </MudPaper>
+}
+
 @code {
     private int _year = DateTime.Now.Year;
     private int _month = DateTime.Now.Month;
     private List<EngineerWorkSummaryDto> _engineerSummaries = [];
     private List<ThemeProgressDto> _themeProgress = [];
+    private List<AlertItemDto> _alerts = [];
 
     protected override async Task OnInitializedAsync() => await LoadData();
 
     private async Task LoadData()
     {
-        _engineerSummaries = await DashboardService.GetEngineerSummaryAsync(_year, _month);
-        _themeProgress = await DashboardService.GetThemeProgressAsync();
+        var engineerSummariesTask = DashboardService.GetEngineerSummaryAsync(_year, _month);
+        var themeProgressTask = DashboardService.GetThemeProgressAsync();
+
+        await Task.WhenAll(engineerSummariesTask, themeProgressTask);
+
+        _engineerSummaries = await engineerSummariesTask;
+        _themeProgress = await themeProgressTask;
+        _alerts = DashboardService.GetAlerts(_year, _month, _engineerSummaries, _themeProgress);
+    }
+
+    private static string CsvField(string? value)
+    {
+        var escaped = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{escaped}\"";
+    }
+
+    private async Task ExportEngineerCsvAsync()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("エンジニア,等級,最大開発可能(h),割り当て合計(h),残余(h),稼働率(%)").Append("\r\n");
+        foreach (var e in _engineerSummaries)
+            sb.Append($"{CsvField(e.EngineerName)},{CsvField(e.GradeName)},{e.MaxDevelopableHours:F1},{e.TotalAllocatedHours:F1},{e.RemainingHours:F1},{e.WorkRate:F1}").Append("\r\n");
+        await JS.InvokeVoidAsync("downloadCsv", $"engineer_summary_{_year}{_month:D2}_{DateTime.Now:HHmmss}.csv", sb.ToString());
+    }
+
+    private async Task ExportThemeCsvAsync()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("テーマ名,受注金額,稼働コスト,前期繰越,合計コスト,消化率(%),残余金額,完了見込み").Append("\r\n");
+        foreach (var t in _themeProgress)
+        {
+            var completion = t.EstimatedCompletionYear.HasValue ? $"{t.EstimatedCompletionYear}年{t.EstimatedCompletionMonth}月" : "-";
+            sb.Append($"{CsvField(t.ThemeName)},{t.OrderAmount},{t.TotalAllocatedCost},{t.CarryOverAmount},{t.TotalAllocatedCost + t.CarryOverAmount},{t.ProgressRate:F1},{t.RemainingAmount},{CsvField(completion)}").Append("\r\n");
+        }
+        await JS.InvokeVoidAsync("downloadCsv", $"theme_progress_{DateTime.Now:yyyyMMdd_HHmmss}.csv", sb.ToString());
     }
 }

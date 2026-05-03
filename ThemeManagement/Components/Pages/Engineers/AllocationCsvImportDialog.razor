@@ -1,0 +1,529 @@
+@using System.Text
+@using System.Globalization
+@inject IAllocationService AllocationService
+@inject IEngineerService EngineerService
+@inject IThemeService ThemeService
+@inject ISnackbar Snackbar
+@inject ILogger<AllocationCsvImportDialog> Logger
+
+<MudDialog Style="min-width:960px">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.UploadFile" Class="mr-2" />
+            工数実績 CSVインポート
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            <MudAlert Severity="Severity.Info" Dense="true">
+                <strong>CSVフォーマット（1行目はヘッダー行として読み込みます）:</strong><br />
+                エンジニア名, テーマNo, 年, 月, 工数(h)<br />
+                ※ ヘッダー行の列名から自動検出を試みます。列マッピングで手動設定も可能です。<br />
+                ※ 同じ（エンジニア, テーマ, 年, 月）の組み合わせが既に存在する場合は上書き更新します。
+            </MudAlert>
+
+            <MudFileUpload T="IBrowserFile" @ref="_fileUpload" FilesChanged="OnFileSelected" Accept=".csv" MaximumFileCount="1">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.FolderOpen"
+                               Color="Color.Primary" FullWidth="true">
+                        CSVファイルを選択
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+
+            @if (_fileName != null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    <MudIcon Icon="@Icons.Material.Filled.InsertDriveFile" Size="Size.Small" Class="mr-1" />
+                    @_fileName
+                </MudText>
+            }
+
+            @if (_csvHeaders.Count > 0)
+            {
+                <MudDivider />
+                <MudText Typo="Typo.subtitle1" Class="mb-1"><strong>列マッピング</strong></MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                    各フィールドに対応するCSVの列を選択してください。ヘッダー名から自動検出済みです。
+                </MudText>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <MudSelect T="int" @bind-Value="_colEngineer" Label="エンジニア名列" Dense="true" Variant="Variant.Outlined">
+                        @foreach (var (header, i) in _csvHeaders.Select((h, i) => (h, i)))
+                        {
+                            <MudSelectItem T="int" Value="i">列@(i + 1): @header</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="int" @bind-Value="_colTheme" Label="テーマNo / テーマ名列" Dense="true" Variant="Variant.Outlined">
+                        @foreach (var (header, i) in _csvHeaders.Select((h, i) => (h, i)))
+                        {
+                            <MudSelectItem T="int" Value="i">列@(i + 1): @header</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="int" @bind-Value="_colYear" Label="年列" Dense="true" Variant="Variant.Outlined">
+                        @foreach (var (header, i) in _csvHeaders.Select((h, i) => (h, i)))
+                        {
+                            <MudSelectItem T="int" Value="i">列@(i + 1): @header</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="int" @bind-Value="_colMonth" Label="月列" Dense="true" Variant="Variant.Outlined">
+                        @foreach (var (header, i) in _csvHeaders.Select((h, i) => (h, i)))
+                        {
+                            <MudSelectItem T="int" Value="i">列@(i + 1): @header</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="int" @bind-Value="_colHours" Label="工数(h)列" Dense="true" Variant="Variant.Outlined">
+                        @foreach (var (header, i) in _csvHeaders.Select((h, i) => (h, i)))
+                        {
+                            <MudSelectItem T="int" Value="i">列@(i + 1): @header</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+
+                @if (!IsMappingValid())
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">同じ列を複数のフィールドに割り当てることはできません。</MudAlert>
+                }
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Preview"
+                           OnClick="ParseAsync"
+                           Disabled="@(!IsMappingValid() || _rawDataRows.Count == 0)">
+                    プレビュー確認
+                </MudButton>
+            }
+
+            @if (_parsed)
+            {
+                <MudDivider />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small">有効: @_validRows.Count 件</MudChip>
+                    @if (_errorRows.Count > 0)
+                    {
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small">エラー: @_errorRows.Count 件</MudChip>
+                    }
+                    @if (_fuzzyRows.Count > 0)
+                    {
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">名寄せ: @_fuzzyRows.Count 件</MudChip>
+                    }
+                </MudStack>
+
+                @if (_fuzzyRows.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        <strong>以下のエンジニア名は近似一致（名寄せ）でマッチングされました。内容を確認してください。</strong>
+                        @foreach (var row in _fuzzyRows)
+                        {
+                            <div>行 @row.RowNo: 「@row.CsvEngineerName」→「@row.MatchedEngineerName」</div>
+                        }
+                    </MudAlert>
+                }
+
+                @if (_errorRows.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true">
+                        <strong>以下の行はエラーのためインポートされません:</strong>
+                        @foreach (var row in _errorRows)
+                        {
+                            <div>行 @row.RowNo: @row.Error</div>
+                        }
+                    </MudAlert>
+                }
+
+                @if (_validRows.Count > 0)
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mt-1">インポートプレビュー（@_validRows.Count 件）</MudText>
+                    <div style="max-height:360px;overflow-y:auto">
+                        <MudTable Items="_validRows" Dense="true" Elevation="0" Striped="true">
+                            <HeaderContent>
+                                <MudTh>エンジニア名（CSV）</MudTh>
+                                <MudTh>マッチ結果</MudTh>
+                                <MudTh>テーマNo</MudTh>
+                                <MudTh>年/月</MudTh>
+                                <MudTh Style="text-align:right">工数(h)</MudTh>
+                                <MudTh>状態</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>@context.CsvEngineerName</MudTd>
+                                <MudTd>
+                                    @if (context.IsFuzzyMatch)
+                                    {
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                            <MudIcon Icon="@Icons.Material.Filled.CompareArrows" Size="Size.Small" Color="Color.Warning" />
+                                            <MudText Typo="Typo.body2" Color="Color.Warning">@context.MatchedEngineerName</MudText>
+                                        </MudStack>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.body2">@context.MatchedEngineerName</MudText>
+                                    }
+                                </MudTd>
+                                <MudTd>@context.ThemeNo</MudTd>
+                                <MudTd>@context.Year/@context.Month.ToString("D2")</MudTd>
+                                <MudTd Style="text-align:right">@context.Hours.ToString("F1")</MudTd>
+                                <MudTd>
+                                    @if (context.IsFuzzyMatch)
+                                    {
+                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">名寄せ</MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudChip T="string" Color="Color.Success" Size="Size.Small">OK</MudChip>
+                                    }
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </div>
+                }
+
+                @if (_validRows.Count == 0 && _errorRows.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">有効なデータがありません。</MudAlert>
+                }
+            }
+
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="@(!_validRows.Any() || _importing)"
+                   OnClick="ExecuteImportAsync">
+            @if (_importing)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            インポート実行 (@_validRows.Count 件)
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private MudFileUpload<IBrowserFile>? _fileUpload;
+    private string? _fileName;
+    private bool _parsed;
+    private bool _importing;
+
+    // Raw parsed data
+    private List<string> _csvHeaders = [];
+    private List<string[]> _rawDataRows = [];
+
+    // Column mapping (column index, 0-based)
+    private int _colEngineer = 0;
+    private int _colTheme = 1;
+    private int _colYear = 2;
+    private int _colMonth = 3;
+    private int _colHours = 4;
+
+    // Preview results
+    private List<AllocationPreviewRow> _validRows = [];
+    private List<ErrorRow> _errorRows = [];
+    private List<AllocationPreviewRow> _fuzzyRows = [];
+
+    // Master data loaded once
+    private List<Engineer> _engineers = [];
+    private List<Theme> _themes = [];
+
+    private record ErrorRow(int RowNo, string Error);
+
+    private record AllocationPreviewRow(
+        int RowNo,
+        string CsvEngineerName,
+        string MatchedEngineerName,
+        int EngineerId,
+        string ThemeNo,
+        int ThemeId,
+        int Year,
+        int Month,
+        decimal Hours,
+        bool IsFuzzyMatch
+    );
+
+    protected override async Task OnInitializedAsync()
+    {
+        _engineers = await EngineerService.GetAllAsync(includeInactive: true);
+        _themes = await ThemeService.GetAllAsync(activeOnly: false);
+    }
+
+    private bool IsMappingValid()
+    {
+        if (_csvHeaders.Count == 0) return false;
+        var cols = new[] { _colEngineer, _colTheme, _colYear, _colMonth, _colHours };
+        return cols.All(c => c >= 0 && c < _csvHeaders.Count)
+            && cols.Distinct().Count() == cols.Length;
+    }
+
+    private async Task OnFileSelected(IBrowserFile file)
+    {
+        _parsed = false;
+        _csvHeaders = [];
+        _rawDataRows = [];
+        _validRows = [];
+        _errorRows = [];
+        _fuzzyRows = [];
+        _fileName = file.Name;
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+
+            int lineNo = 0;
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                lineNo++;
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                var cols = ParseCsvLine(line);
+
+                if (lineNo == 1)
+                {
+                    _csvHeaders = cols;
+                    AutoDetectColumns();
+                    continue;
+                }
+
+                _rawDataRows.Add([.. cols]);
+
+                if (lineNo > 10001)
+                {
+                    _errorRows.Add(new ErrorRow(lineNo, "10000行を超えたため読み込みを中断しました"));
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "CSVファイルの読み込み中にエラーが発生しました");
+            _errorRows.Add(new ErrorRow(0, $"ファイル読み込みエラー: {ex.Message}"));
+        }
+
+        StateHasChanged();
+    }
+
+    private void AutoDetectColumns()
+    {
+        // Default sequential mapping
+        _colEngineer = 0;
+        _colTheme = Math.Min(1, _csvHeaders.Count - 1);
+        _colYear = Math.Min(2, _csvHeaders.Count - 1);
+        _colMonth = Math.Min(3, _csvHeaders.Count - 1);
+        _colHours = Math.Min(4, _csvHeaders.Count - 1);
+
+        // Try to detect from header names
+        bool foundEng = false, foundTheme = false, foundYear = false, foundMonth = false, foundHours = false;
+        for (int i = 0; i < _csvHeaders.Count; i++)
+        {
+            var h = _csvHeaders[i].Trim().ToLower();
+            if (!foundEng && (h.Contains("エンジニア") || h.Contains("担当") || h == "engineer" || h == "name" || h == "氏名"))
+            { _colEngineer = i; foundEng = true; }
+            else if (!foundTheme && (h.Contains("テーマ") || h.Contains("案件") || h.Contains("theme") || h.Contains("no")))
+            { _colTheme = i; foundTheme = true; }
+            else if (!foundYear && (h == "年" || h == "year" || h == "yyyy" || h.StartsWith("年度")))
+            { _colYear = i; foundYear = true; }
+            else if (!foundMonth && (h == "月" || h == "month" || h == "mm"))
+            { _colMonth = i; foundMonth = true; }
+            else if (!foundHours && (h.Contains("工数") || h.Contains("時間") || h == "hours" || h == "h" || h.Contains("h)")))
+            { _colHours = i; foundHours = true; }
+        }
+    }
+
+    private Task ParseAsync()
+    {
+        _parsed = false;
+        _validRows = [];
+        _errorRows = [];
+        _fuzzyRows = [];
+
+        int lineNo = 1; // header is row 1
+        foreach (var cols in _rawDataRows)
+        {
+            lineNo++;
+            var result = ParseRow(lineNo, cols);
+            if (result.Row != null)
+            {
+                _validRows.Add(result.Row);
+                if (result.Row.IsFuzzyMatch)
+                    _fuzzyRows.Add(result.Row);
+            }
+            else
+            {
+                _errorRows.Add(new ErrorRow(lineNo, result.Error!));
+            }
+        }
+
+        _parsed = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private (AllocationPreviewRow? Row, string? Error) ParseRow(int lineNo, string[] cols)
+    {
+        var maxCol = Math.Max(Math.Max(_colEngineer, _colTheme), Math.Max(Math.Max(_colYear, _colMonth), _colHours));
+        if (cols.Length <= maxCol)
+            return (null, $"列数が不足しています（{cols.Length}列、必要: {maxCol + 1}列以上）");
+
+        var engineerName = cols[_colEngineer].Trim();
+        if (string.IsNullOrEmpty(engineerName))
+            return (null, "エンジニア名が空です");
+
+        var themeKey = cols[_colTheme].Trim();
+        if (string.IsNullOrEmpty(themeKey))
+            return (null, "テーマNo/テーマ名が空です");
+
+        if (!int.TryParse(cols[_colYear].Trim(), out var year) || year < 2000 || year > 2100)
+            return (null, $"年の形式が不正です（{cols[_colYear].Trim()}）");
+
+        if (!int.TryParse(cols[_colMonth].Trim(), out var month) || month < 1 || month > 12)
+            return (null, $"月の形式が不正です（{cols[_colMonth].Trim()}）");
+
+        var hoursStr = cols[_colHours].Trim().Replace(",", "");
+        if (!decimal.TryParse(hoursStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var hours) || hours <= 0)
+            return (null, $"工数の形式が不正です（値は0より大きい数値を入力してください: {cols[_colHours].Trim()}）");
+
+        var (engineer, isFuzzy) = ResolveEngineer(engineerName);
+        if (engineer == null)
+            return (null, $"エンジニア「{engineerName}」が見つかりません（登録名と一致しませんでした）");
+
+        var theme = _themes.FirstOrDefault(t => t.ThemeNo == themeKey)
+                 ?? _themes.FirstOrDefault(t => t.Name.Equals(themeKey, StringComparison.OrdinalIgnoreCase));
+        if (theme == null)
+            return (null, $"テーマ「{themeKey}」が見つかりません（テーマNoまたはテーマ名で検索しました）");
+
+        return (new AllocationPreviewRow(
+            lineNo,
+            engineerName,
+            engineer.Name,
+            engineer.Id,
+            theme.ThemeNo,
+            theme.Id,
+            year,
+            month,
+            hours,
+            isFuzzy
+        ), null);
+    }
+
+    private (Engineer? Engineer, bool IsFuzzy) ResolveEngineer(string name)
+    {
+        // 1. Exact match (case-sensitive)
+        var exact = _engineers.FirstOrDefault(e => e.Name == name);
+        if (exact != null) return (exact, false);
+
+        // 2. Case-insensitive exact match
+        var ci = _engineers.FirstOrDefault(e => e.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (ci != null) return (ci, false);
+
+        // 3. Normalized contains match
+        var normalized = NormalizeString(name);
+        var contains = _engineers.FirstOrDefault(e =>
+            NormalizeString(e.Name).Contains(normalized, StringComparison.Ordinal)
+            || normalized.Contains(NormalizeString(e.Name), StringComparison.Ordinal));
+        if (contains != null) return (contains, true);
+
+        // 4. Fuzzy match using Levenshtein distance
+        var best = _engineers
+            .Select(e => (Engineer: e, Distance: LevenshteinDistance(normalized, NormalizeString(e.Name))))
+            .OrderBy(x => x.Distance)
+            .FirstOrDefault();
+
+        if (best.Engineer != null)
+        {
+            var maxLen = Math.Max(name.Length, best.Engineer.Name.Length);
+            if (maxLen > 0)
+            {
+                var similarity = 1.0 - (double)best.Distance / maxLen;
+                if (similarity >= 0.6)
+                    return (best.Engineer, true);
+            }
+        }
+
+        return (null, false);
+    }
+
+    private static string NormalizeString(string s) =>
+        s.Trim()
+         .ToLower()
+         .Replace("　", " ")   // full-width space -> half-width
+         .Replace("・", "")
+         .Replace(" ", "");    // remove all spaces for comparison
+
+    private static int LevenshteinDistance(string a, string b)
+    {
+        if (a.Length == 0) return b.Length;
+        if (b.Length == 0) return a.Length;
+
+        var dp = new int[a.Length + 1, b.Length + 1];
+        for (int i = 0; i <= a.Length; i++) dp[i, 0] = i;
+        for (int j = 0; j <= b.Length; j++) dp[0, j] = j;
+
+        for (int i = 1; i <= a.Length; i++)
+        {
+            for (int j = 1; j <= b.Length; j++)
+            {
+                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                dp[i, j] = Math.Min(
+                    Math.Min(dp[i - 1, j] + 1, dp[i, j - 1] + 1),
+                    dp[i - 1, j - 1] + cost);
+            }
+        }
+
+        return dp[a.Length, b.Length];
+    }
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var sb = new StringBuilder();
+        bool inQuotes = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (inQuotes)
+            {
+                if (c == '"' && i + 1 < line.Length && line[i + 1] == '"')
+                { sb.Append('"'); i++; }
+                else if (c == '"')
+                { inQuotes = false; }
+                else
+                { sb.Append(c); }
+            }
+            else
+            {
+                if (c == '"') { inQuotes = true; }
+                else if (c == ',') { fields.Add(sb.ToString()); sb.Clear(); }
+                else { sb.Append(c); }
+            }
+        }
+        fields.Add(sb.ToString());
+        return fields;
+    }
+
+    private async Task ExecuteImportAsync()
+    {
+        _importing = true;
+        try
+        {
+            var rows = _validRows.Select(r => new AllocationImportData(r.EngineerId, r.ThemeId, r.Year, r.Month, r.Hours));
+            var (added, updated) = await AllocationService.BulkImportAllocationsAsync(rows);
+            Snackbar.Add($"インポート完了: {added}件追加、{updated}件更新", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "工数CSVインポート中にエラーが発生しました");
+            Snackbar.Add($"インポートエラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

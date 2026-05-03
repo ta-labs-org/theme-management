@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authentication;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using ThemeManagement.Components;
@@ -68,6 +68,47 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseAntiforgery();
+
+// DB バックアップダウンロード
+app.MapGet("/api/backup/download", async (IConfiguration config) =>
+{
+    var connStr = config.GetConnectionString("DefaultConnection") ?? "Data Source=theme_management.db";
+    // SQLiteのパスを抽出
+    var sqliteConnectionStringBuilder = new SqliteConnectionStringBuilder(connStr);
+    var dataSource = string.IsNullOrWhiteSpace(sqliteConnectionStringBuilder.DataSource)
+        ? "theme_management.db"
+        : sqliteConnectionStringBuilder.DataSource;
+
+    if (!File.Exists(dataSource))
+        return Results.NotFound("DBファイルが見つかりません");
+
+    var tempFile = Path.Combine(
+        Path.GetTempPath(),
+        $"theme_backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.db");
+    try
+    {
+        // VACUUM INTO で安全にコピー（WALのコミット済みデータを含む）
+        using var conn = new SqliteConnection($"Data Source={dataSource}");
+        await conn.OpenAsync();
+        var cmd = conn.CreateCommand();
+        var escapedTempFile = tempFile.Replace("'", "''");
+        cmd.CommandText = $"VACUUM INTO '{escapedTempFile}'";
+        await cmd.ExecuteNonQueryAsync();
+
+        var fileName = $"theme_backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}.db";
+        var bytes = await File.ReadAllBytesAsync(tempFile);
+        File.Delete(tempFile);
+
+        return Results.File(bytes, "application/octet-stream", fileName);
+    }
+    catch
+    {
+        if (File.Exists(tempFile))
+            File.Delete(tempFile);
+
+        throw;
+    }
+});
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

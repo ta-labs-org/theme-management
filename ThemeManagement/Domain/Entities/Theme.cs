@@ -11,8 +11,14 @@ public class Theme
     public DateOnly? ActualCompletionDate { get; set; }
     public decimal OrderAmount { get; set; }
     public string Status { get; set; } = "Active";
+    public string Tags { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    public IEnumerable<string> GetTagList() =>
+        string.IsNullOrWhiteSpace(Tags)
+            ? []
+            : Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public ICollection<EngineerThemeAllocation> EngineerAllocations { get; set; } = new List<EngineerThemeAllocation>();
 }
