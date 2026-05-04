@@ -1,151 +1,285 @@
-﻿@page "/"
+@page "/"
 @rendermode InteractiveServer
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject IDashboardService DashboardService
+@inject IDashboardSettingsService SettingsService
 @inject IJSRuntime JS
 
 <PageTitle>ダッシュボード</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">ダッシュボード</MudText>
-
-<MudPaper Class="pa-4 mb-4 no-print" Elevation="1">
-    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
-        <MudNumericField T="int" @bind-Value="_year" Label="年" Min="2020" Max="2100" Style="width:100px" />
-        <MudNumericField T="int" @bind-Value="_month" Label="月" Min="1" Max="12" Style="width:80px" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadData">更新</MudButton>
-        <MudDivider Vertical="true" FlexItem="true" />
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print"
-                   OnClick="PrintPage">印刷</MudButton>
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                   Href="@($"/api/report/pdf?type=dashboard&year={_year}&month={_month}")"
-                   Target="_blank">PDF出力</MudButton>
-    </MudStack>
-</MudPaper>
-
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
-    <MudText Typo="Typo.h6">エンジニア稼働サマリ（@(_year)年@(_month)月）</MudText>
-    <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
-               StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportEngineerCsvAsync">CSVエクスポート</MudButton>
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h5" Class="flex-grow-1">ダッシュボード</MudText>
+    <MudTooltip Text="ウィジェットの表示・順序をカスタマイズ">
+        <MudButton Variant="Variant.Outlined"
+                   StartIcon="@Icons.Material.Filled.Tune"
+                   OnClick="ToggleCustomizePanel">
+            カスタマイズ
+        </MudButton>
+    </MudTooltip>
 </MudStack>
-<MudTable Items="_engineerSummaries" Dense="true" Hover="true" Elevation="2" Class="mb-6"
-          RowClassFunc="@((row, _) => row.MaxDevelopableHours > 0 && row.TotalAllocatedHours > row.MaxDevelopableHours ? "row-over"
-                                    : row.MaxDevelopableHours > 0 && row.TotalAllocatedHours == 0 ? "row-unassigned"
-                                    : row.MaxDevelopableHours > 0 && row.TotalAllocatedHours > 0 && row.TotalAllocatedHours < row.MaxDevelopableHours * 0.1m ? "row-under"
-                                    : "")">
-    <HeaderContent>
-        <MudTh>エンジニア</MudTh>
-        <MudTh>等級</MudTh>
-        <MudTh Style="text-align:right">最大開発可能(h)</MudTh>
-        <MudTh Style="text-align:right">割り当て合計(h)</MudTh>
-        <MudTh Style="text-align:right">残余(h)</MudTh>
-        <MudTh Style="text-align:right">稼働率(%)</MudTh>
-        <MudTh>詳細</MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd>@context.EngineerName</MudTd>
-        <MudTd>@context.GradeName</MudTd>
-        <MudTd Style="text-align:right">@context.MaxDevelopableHours.ToString("F1")</MudTd>
-        <MudTd Style="text-align:right">@context.TotalAllocatedHours.ToString("F1")</MudTd>
-        <MudTd Style="text-align:right">
-            <MudText Color="@(context.RemainingHours < 0 ? Color.Error : Color.Default)">
-                @context.RemainingHours.ToString("F1")
-            </MudText>
-        </MudTd>
-        <MudTd Style="text-align:right">
-            @{
-                var rateColor = context.MaxDevelopableHours > 0 && context.WorkRate > 100 ? Color.Error
-                              : context.MaxDevelopableHours > 0 && context.TotalAllocatedHours > 0 && context.WorkRate < 10 ? Color.Warning
-                              : Color.Default;
-                var rateWeight = rateColor != Color.Default ? "font-weight:700" : "";
-            }
-            <MudText Color="@rateColor" Style="@rateWeight">
-                @context.WorkRate.ToString("F1")
-                @if (context.MaxDevelopableHours > 0 && context.WorkRate > 100) { <text> ⚠</text> }
-                @if (context.MaxDevelopableHours > 0 && context.TotalAllocatedHours > 0 && context.WorkRate < 10) { <text> ↓</text> }
-            </MudText>
-        </MudTd>
-        <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
-                           Href="@($"/engineers/{context.EngineerId}/allocation")" />
-        </MudTd>
-    </RowTemplate>
-    <NoRecordsContent><MudText>データがありません</MudText></NoRecordsContent>
-</MudTable>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
-    <MudText Typo="Typo.h6">テーマ進捗サマリ（アクティブ案件）</MudText>
-    <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
-               StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportThemeCsvAsync">CSVエクスポート</MudButton>
-</MudStack>
-<MudTable Items="_themeProgress" Dense="true" Hover="true" Elevation="2"
-          RowClassFunc="@((row, _) => row.ProgressRate > 100 ? "row-over" : "")">
-    <HeaderContent>
-        <MudTh>テーマ名</MudTh>
-        <MudTh Style="text-align:right">受注金額(円)</MudTh>
-        <MudTh Style="text-align:right">稼働コスト(円)</MudTh>
-        <MudTh Style="text-align:right">前期繰越(円)</MudTh>
-        <MudTh Style="text-align:right">合計コスト(円)</MudTh>
-        <MudTh Style="text-align:right">消化率(%)</MudTh>
-        <MudTh Style="text-align:right">残余金額(円)</MudTh>
-        <MudTh>完了見込み</MudTh>
-        <MudTh>詳細</MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd>@context.ThemeName</MudTd>
-        <MudTd Style="text-align:right">@context.OrderAmount.ToString("N0")</MudTd>
-        <MudTd Style="text-align:right">@context.TotalAllocatedCost.ToString("N0")</MudTd>
-        <MudTd Style="text-align:right">
-            @if (context.CarryOverAmount > 0)
-            {
-                <MudText Style="color:#6a1b9a;font-weight:600">@context.CarryOverAmount.ToString("N0")</MudText>
-            }
-            else
-            {
-                <span style="color:#bdbdbd">—</span>
-            }
-        </MudTd>
-        <MudTd Style="text-align:right;font-weight:600">@((context.TotalAllocatedCost + context.CarryOverAmount).ToString("N0"))</MudTd>
-        <MudTd Style="text-align:right">
-            <MudText Color="@(context.ProgressRate > 100 ? Color.Error : Color.Default)">
-                @context.ProgressRate.ToString("F1")
-            </MudText>
-        </MudTd>
-        <MudTd Style="text-align:right">@context.RemainingAmount.ToString("N0")</MudTd>
-        <MudTd>
-            @(context.EstimatedCompletionYear.HasValue
-                ? $"{context.EstimatedCompletionYear}年{context.EstimatedCompletionMonth}月"
-                : "-")
-        </MudTd>
-        <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
-                           Href="@($"/themes/{context.ThemeId}/allocation")" />
-        </MudTd>
-    </RowTemplate>
-    <NoRecordsContent><MudText>アクティブなテーマがありません</MudText></NoRecordsContent>
-</MudTable>
-
-@if (_alerts.Count > 0)
+@foreach (var widget in _settings.Widgets.Where(w => w.IsVisible).OrderBy(w => w.Order))
 {
-    <MudText Typo="Typo.h6" Class="mb-2 mt-4">
-        <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Color="Color.Warning" Class="mr-1" />警告・アラート
-    </MudText>
-    <MudPaper Class="pa-3 mb-4" Elevation="2">
-        <MudStack Spacing="2">
-            @foreach (var alert in _alerts)
+    switch (widget.Id)
+    {
+        case "kpi":
+            <MudPaper Class="pa-4 mb-6 no-print" Elevation="1">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+                    <MudText Typo="Typo.h6" Class="flex-grow-1">KPIサマリ（@(_year)年@(_month)月）</MudText>
+                    <MudNumericField T="int" @bind-Value="_year" Label="年" Min="2020" Max="2100"
+                                     Style="width:100px" />
+                    <MudNumericField T="int" @bind-Value="_month" Label="月" Min="1" Max="12"
+                                     Style="width:80px" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadData">更新</MudButton>
+                    <MudDivider Vertical="true" FlexItem="true" />
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print"
+                               OnClick="PrintPage">印刷</MudButton>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                               Href="@($"/api/report/pdf?type=dashboard&year={_year}&month={_month}")"
+                               Target="_blank">PDF出力</MudButton>
+                </MudStack>
+                <MudGrid>
+                    @if (_kpi != null)
+                    {
+                        <MudItem xs="12" sm="4">
+                            <MudCard Outlined="@(!_settings.PinnedKpis.Contains("project-count"))"
+                                     Elevation="@(_settings.PinnedKpis.Contains("project-count") ? 3 : 0)">
+                                <MudCardContent Class="text-center">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.FlexEnd" Class="mb-1">
+                                        <MudTooltip Text="@(_settings.PinnedKpis.Contains("project-count") ? "ピン留めを外す" : "ピン留め")">
+                                            <MudIconButton Icon="@(_settings.PinnedKpis.Contains("project-count") ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)"
+                                                           Size="Size.Small"
+                                                           Color="@(_settings.PinnedKpis.Contains("project-count") ? Color.Primary : Color.Default)"
+                                                           OnClick='() => ToggleKpiPin("project-count")' />
+                                        </MudTooltip>
+                                    </MudStack>
+                                    <MudIcon Icon="@Icons.Material.Filled.Topic" Color="Color.Primary" Style="font-size:2.5rem" />
+                                    <MudText Typo="Typo.h4" Class="mt-1">@_kpi.ActiveThemeCount</MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">アクティブ案件数</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudCard Outlined="@(!_settings.PinnedKpis.Contains("work-rate"))"
+                                     Elevation="@(_settings.PinnedKpis.Contains("work-rate") ? 3 : 0)">
+                                <MudCardContent Class="text-center">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.FlexEnd" Class="mb-1">
+                                        <MudTooltip Text="@(_settings.PinnedKpis.Contains("work-rate") ? "ピン留めを外す" : "ピン留め")">
+                                            <MudIconButton Icon="@(_settings.PinnedKpis.Contains("work-rate") ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)"
+                                                           Size="Size.Small"
+                                                           Color="@(_settings.PinnedKpis.Contains("work-rate") ? Color.Primary : Color.Default)"
+                                                           OnClick='() => ToggleKpiPin("work-rate")' />
+                                        </MudTooltip>
+                                    </MudStack>
+                                    <MudIcon Icon="@Icons.Material.Filled.Speed" Color="Color.Success" Style="font-size:2.5rem" />
+                                    <MudText Typo="Typo.h4" Class="mt-1">@_kpi.AverageWorkRate.ToString("F1")<span style="font-size:1.2rem">%</span></MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">平均稼働率</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudCard Outlined="@(!_settings.PinnedKpis.Contains("monthly-cost"))"
+                                     Elevation="@(_settings.PinnedKpis.Contains("monthly-cost") ? 3 : 0)">
+                                <MudCardContent Class="text-center">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.FlexEnd" Class="mb-1">
+                                        <MudTooltip Text="@(_settings.PinnedKpis.Contains("monthly-cost") ? "ピン留めを外す" : "ピン留め")">
+                                            <MudIconButton Icon="@(_settings.PinnedKpis.Contains("monthly-cost") ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)"
+                                                           Size="Size.Small"
+                                                           Color="@(_settings.PinnedKpis.Contains("monthly-cost") ? Color.Primary : Color.Default)"
+                                                           OnClick='() => ToggleKpiPin("monthly-cost")' />
+                                        </MudTooltip>
+                                    </MudStack>
+                                    <MudIcon Icon="@Icons.Material.Filled.CurrencyYen" Color="Color.Warning" Style="font-size:2.5rem" />
+                                    <MudText Typo="Typo.h4" Class="mt-1">¥@_kpi.TotalMonthlyCost.ToString("N0")</MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">月間稼働コスト</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+                    else
+                    {
+                        <MudItem xs="12">
+                            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudPaper>
+            break;
+
+        case "engineer-summary":
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                <MudText Typo="Typo.h6">エンジニア稼働サマリ（@(_year)年@(_month)月）</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportEngineerCsvAsync">CSVエクスポート</MudButton>
+            </MudStack>
+            <MudTable Items="_engineerSummaries" Dense="true" Hover="true" Elevation="2" Class="mb-6"
+                      RowClassFunc="@((row, _) => row.MaxDevelopableHours > 0 && row.TotalAllocatedHours > row.MaxDevelopableHours ? "row-over"
+                                                : row.MaxDevelopableHours > 0 && row.TotalAllocatedHours == 0 ? "row-unassigned"
+                                                : row.MaxDevelopableHours > 0 && row.TotalAllocatedHours > 0 && row.TotalAllocatedHours < row.MaxDevelopableHours * 0.1m ? "row-under"
+                                                : "")">
+                <HeaderContent>
+                    <MudTh>エンジニア</MudTh>
+                    <MudTh>等級</MudTh>
+                    <MudTh Style="text-align:right">最大開発可能(h)</MudTh>
+                    <MudTh Style="text-align:right">割り当て合計(h)</MudTh>
+                    <MudTh Style="text-align:right">残余(h)</MudTh>
+                    <MudTh Style="text-align:right">稼働率(%)</MudTh>
+                    <MudTh>詳細</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.EngineerName</MudTd>
+                    <MudTd>@context.GradeName</MudTd>
+                    <MudTd Style="text-align:right">@context.MaxDevelopableHours.ToString("F1")</MudTd>
+                    <MudTd Style="text-align:right">@context.TotalAllocatedHours.ToString("F1")</MudTd>
+                    <MudTd Style="text-align:right">
+                        <MudText Color="@(context.RemainingHours < 0 ? Color.Error : Color.Default)">
+                            @context.RemainingHours.ToString("F1")
+                        </MudText>
+                    </MudTd>
+                    <MudTd Style="text-align:right">
+                        @{
+                            var rateColor = context.MaxDevelopableHours > 0 && context.WorkRate > 100 ? Color.Error
+                                          : context.MaxDevelopableHours > 0 && context.TotalAllocatedHours > 0 && context.WorkRate < 10 ? Color.Warning
+                                          : Color.Default;
+                            var rateWeight = rateColor != Color.Default ? "font-weight:700" : "";
+                        }
+                        <MudText Color="@rateColor" Style="@rateWeight">
+                            @context.WorkRate.ToString("F1")
+                            @if (context.MaxDevelopableHours > 0 && context.WorkRate > 100) { <text> ⚠</text> }
+                            @if (context.MaxDevelopableHours > 0 && context.TotalAllocatedHours > 0 && context.WorkRate < 10) { <text> ↓</text> }
+                        </MudText>
+                    </MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                                       Href="@($"/engineers/{context.EngineerId}/allocation")" />
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText>データがありません</MudText></NoRecordsContent>
+            </MudTable>
+            break;
+
+        case "theme-progress":
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                <MudText Typo="Typo.h6">テーマ進捗サマリ（アクティブ案件）</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportThemeCsvAsync">CSVエクスポート</MudButton>
+            </MudStack>
+            <MudTable Items="_themeProgress" Dense="true" Hover="true" Elevation="2" Class="mb-6"
+                      RowClassFunc="@((row, _) => row.ProgressRate > 100 ? "row-over" : "")">
+                <HeaderContent>
+                    <MudTh>テーマ名</MudTh>
+                    <MudTh Style="text-align:right">受注金額(円)</MudTh>
+                    <MudTh Style="text-align:right">稼働コスト(円)</MudTh>
+                    <MudTh Style="text-align:right">前期繰越(円)</MudTh>
+                    <MudTh Style="text-align:right">合計コスト(円)</MudTh>
+                    <MudTh Style="text-align:right">消化率(%)</MudTh>
+                    <MudTh Style="text-align:right">残余金額(円)</MudTh>
+                    <MudTh>完了見込み</MudTh>
+                    <MudTh>詳細</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.ThemeName</MudTd>
+                    <MudTd Style="text-align:right">@context.OrderAmount.ToString("N0")</MudTd>
+                    <MudTd Style="text-align:right">@context.TotalAllocatedCost.ToString("N0")</MudTd>
+                    <MudTd Style="text-align:right">
+                        @if (context.CarryOverAmount > 0)
+                        {
+                            <MudText Style="color:#6a1b9a;font-weight:600">@context.CarryOverAmount.ToString("N0")</MudText>
+                        }
+                        else
+                        {
+                            <span style="color:#bdbdbd">—</span>
+                        }
+                    </MudTd>
+                    <MudTd Style="text-align:right;font-weight:600">@((context.TotalAllocatedCost + context.CarryOverAmount).ToString("N0"))</MudTd>
+                    <MudTd Style="text-align:right">
+                        <MudText Color="@(context.ProgressRate > 100 ? Color.Error : Color.Default)">
+                            @context.ProgressRate.ToString("F1")
+                        </MudText>
+                    </MudTd>
+                    <MudTd Style="text-align:right">@context.RemainingAmount.ToString("N0")</MudTd>
+                    <MudTd>
+                        @(context.EstimatedCompletionYear.HasValue
+                            ? $"{context.EstimatedCompletionYear}年{context.EstimatedCompletionMonth}月"
+                            : "-")
+                    </MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                                       Href="@($"/themes/{context.ThemeId}/allocation")" />
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText>アクティブなテーマがありません</MudText></NoRecordsContent>
+            </MudTable>
+            break;
+
+        case "alerts":
+            @if (_alerts.Count > 0)
             {
-                var severity = alert.Severity switch
-                {
-                    AlertSeverity.Error => Severity.Error,
-                    AlertSeverity.Warning => Severity.Warning,
-                    _ => Severity.Info
-                };
-                <MudAlert Severity="@severity" Dense="true">
-                    <MudText><strong>[@alert.Category]</strong> @alert.Message</MudText>
-                </MudAlert>
+                <MudText Typo="Typo.h6" Class="mb-2 mt-4">
+                    <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Color="Color.Warning" Class="mr-1" />警告・アラート
+                </MudText>
+                <MudPaper Class="pa-3 mb-4" Elevation="2">
+                    <MudStack Spacing="2">
+                        @foreach (var alert in _alerts)
+                        {
+                            var severity = alert.Severity switch
+                            {
+                                AlertSeverity.Error => Severity.Error,
+                                AlertSeverity.Warning => Severity.Warning,
+                                _ => Severity.Info
+                            };
+                            <MudAlert Severity="@severity" Dense="true">
+                                <MudText><strong>[@alert.Category]</strong> @alert.Message</MudText>
+                            </MudAlert>
+                        }
+                    </MudStack>
+                </MudPaper>
             }
-        </MudStack>
-    </MudPaper>
+            break;
+    }
 }
+
+<!-- Widget customization drawer -->
+<MudDrawer @bind-Open="_customizePanelOpen" Anchor="Anchor.Right" Elevation="2"
+           Variant="DrawerVariant.Temporary" Width="340px">
+    <MudDrawerHeader>
+        <MudText Typo="Typo.h6">ウィジェット設定</MudText>
+    </MudDrawerHeader>
+    <div class="pa-4">
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            ウィジェットの表示・非表示を切り替えたり、ドラッグ&amp;ドロップで順序を変更できます。
+        </MudText>
+
+        <MudDropContainer T="WidgetConfig"
+                          Items="_settings.Widgets"
+                          ItemsSelector="@((item, _) => true)"
+                          ItemDropped="OnWidgetDropped"
+                          @ref="_dropContainer">
+            <ChildContent>
+                <MudDropZone T="WidgetConfig" Identifier="widgets" AllowReorder="true"
+                             Class="d-flex flex-column gap-2">
+                    <ItemRenderer>
+                        <MudPaper Outlined="true" Class="pa-3">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.DragIndicator"
+                                         Style="cursor:grab;color:var(--mud-palette-text-secondary)" />
+                                <MudText Class="flex-grow-1">@context.DisplayName</MudText>
+                                <MudSwitch T="bool"
+                                           Value="context.IsVisible"
+                                           ValueChanged="v => OnWidgetVisibilityChanged(context, v)"
+                                           Color="Color.Primary" />
+                            </MudStack>
+                        </MudPaper>
+                    </ItemRenderer>
+                </MudDropZone>
+            </ChildContent>
+        </MudDropContainer>
+
+        <MudDivider Class="my-4" />
+        <MudButton Variant="Variant.Text" Color="Color.Default" FullWidth="true"
+                   OnClick="ResetSettings">設定をリセット</MudButton>
+    </div>
+</MudDrawer>
 
 @code {
     private int _year = DateTime.Now.Year;
@@ -153,19 +287,76 @@
     private List<EngineerWorkSummaryDto> _engineerSummaries = [];
     private List<ThemeProgressDto> _themeProgress = [];
     private List<AlertItemDto> _alerts = [];
+    private DashboardKpiDto? _kpi;
+
+    private DashboardSettings _settings = DashboardSettingsService.CreateDefaultSettings();
+    private bool _customizePanelOpen = false;
+    private MudDropContainer<WidgetConfig>? _dropContainer;
 
     protected override async Task OnInitializedAsync() => await LoadData();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // JSRuntime (localStorage) is only available after the Blazor circuit is connected,
+            // which is after the first render — so settings must be loaded here, not in OnInitializedAsync.
+            _settings = await SettingsService.LoadAsync();
+            StateHasChanged();
+        }
+    }
 
     private async Task LoadData()
     {
         var engineerSummariesTask = DashboardService.GetEngineerSummaryAsync(_year, _month);
         var themeProgressTask = DashboardService.GetThemeProgressAsync();
+        var kpiTask = DashboardService.GetKpiSummaryAsync(_year, _month);
 
-        await Task.WhenAll(engineerSummariesTask, themeProgressTask);
+        await Task.WhenAll(engineerSummariesTask, themeProgressTask, kpiTask);
 
         _engineerSummaries = await engineerSummariesTask;
         _themeProgress = await themeProgressTask;
+        _kpi = await kpiTask;
         _alerts = DashboardService.GetAlerts(_year, _month, _engineerSummaries, _themeProgress);
+    }
+
+    private void ToggleCustomizePanel() => _customizePanelOpen = !_customizePanelOpen;
+
+    private async Task OnWidgetVisibilityChanged(WidgetConfig widget, bool isVisible)
+    {
+        widget.IsVisible = isVisible;
+        await SettingsService.SaveAsync(_settings);
+    }
+
+    private async Task OnWidgetDropped(MudItemDropInfo<WidgetConfig> dropInfo)
+    {
+        if (dropInfo.Item is not { } droppedItem) return;
+        var ordered = _settings.Widgets.OrderBy(w => w.Order).ToList();
+        var item = ordered.FirstOrDefault(w => w.Id == droppedItem.Id);
+        if (item == null) return;
+        ordered.Remove(item);
+        var targetIndex = Math.Clamp(dropInfo.IndexInZone, 0, ordered.Count);
+        ordered.Insert(targetIndex, item);
+        for (int i = 0; i < ordered.Count; i++)
+            ordered[i].Order = i;
+        _settings.Widgets = ordered;
+        await SettingsService.SaveAsync(_settings);
+    }
+
+    private async Task ToggleKpiPin(string kpiId)
+    {
+        if (_settings.PinnedKpis.Contains(kpiId))
+            _settings.PinnedKpis.Remove(kpiId);
+        else
+            _settings.PinnedKpis.Add(kpiId);
+        await SettingsService.SaveAsync(_settings);
+    }
+
+    private async Task ResetSettings()
+    {
+        _settings = DashboardSettingsService.CreateDefaultSettings();
+        await SettingsService.SaveAsync(_settings);
+        _dropContainer?.Refresh();
     }
 
     private static string CsvField(string? value)

@@ -9,6 +9,7 @@ public interface IDashboardService
 {
     Task<List<EngineerWorkSummaryDto>> GetEngineerSummaryAsync(int year, int month);
     Task<List<ThemeProgressDto>> GetThemeProgressAsync();
+    Task<DashboardKpiDto> GetKpiSummaryAsync(int year, int month);
     List<AlertItemDto> GetAlerts(int year, int month, List<EngineerWorkSummaryDto> summaries, List<ThemeProgressDto> themeProgress);
 }
 
@@ -114,6 +115,32 @@ public class DashboardService : IDashboardService
         }
 
         return result;
+    }
+
+    public async Task<DashboardKpiDto> GetKpiSummaryAsync(int year, int month)
+    {
+        var activeEngineerCount = await _db.Engineers.CountAsync(e => e.IsActive);
+        var activeThemeCount = await _db.Themes.CountAsync(t => ThemeStatus.ActiveStatuses.Contains(t.Status));
+
+        var engineerSummaries = await GetEngineerSummaryAsync(year, month);
+        var billableEngineers = engineerSummaries.Where(e => e.MaxDevelopableHours > 0).ToList();
+        var avgWorkRate = billableEngineers.Count > 0
+            ? billableEngineers.Average(e => e.WorkRate)
+            : 0m;
+
+        var allocations = await _db.EngineerThemeAllocations
+            .Include(a => a.Engineer).ThenInclude(e => e.Grade)
+            .Include(a => a.Theme)
+            .Where(a => a.Year == year && a.Month == month)
+            .ToListAsync();
+
+        var totalMonthlyCost = allocations.Sum(a =>
+        {
+            bool useCost = a.Theme.OrderType == "社用開発";
+            return a.AllocatedHours * (useCost ? a.Engineer.Grade.UnitCostPrice : a.Engineer.Grade.UnitSalePrice);
+        });
+
+        return new DashboardKpiDto(activeEngineerCount, activeThemeCount, avgWorkRate, totalMonthlyCost);
     }
 
     public List<AlertItemDto> GetAlerts(int year, int month, List<EngineerWorkSummaryDto> summaries, List<ThemeProgressDto> themeProgress)
