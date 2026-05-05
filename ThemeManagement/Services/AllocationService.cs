@@ -37,6 +37,7 @@ public class AllocationService : IAllocationService
 
     public Task<List<AllocationRowDto>> GetByEngineerAsync(int engineerId, int year, int month) =>
         _db.EngineerThemeAllocations
+            .AsNoTracking()
             .Include(a => a.Engineer).ThenInclude(e => e.Grade)
             .Include(a => a.Theme)
             .Where(a => a.EngineerId == engineerId && a.Year == year && a.Month == month)
@@ -48,6 +49,7 @@ public class AllocationService : IAllocationService
 
     public Task<List<AllocationRowDto>> GetByThemeAsync(int themeId, int year, int month) =>
         _db.EngineerThemeAllocations
+            .AsNoTracking()
             .Include(a => a.Engineer).ThenInclude(e => e.Grade)
             .Include(a => a.Theme)
             .Where(a => a.ThemeId == themeId && a.Year == year && a.Month == month)

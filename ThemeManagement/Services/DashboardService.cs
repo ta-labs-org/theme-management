@@ -27,6 +27,7 @@ public class DashboardService : IDashboardService
     public async Task<List<EngineerWorkSummaryDto>> GetEngineerSummaryAsync(int year, int month)
     {
         var engineers = await _db.Engineers
+            .AsNoTracking()
             .Include(e => e.Grade)
             .Where(e => e.IsActive)
             .OrderBy(e => e.Name)
@@ -35,14 +36,24 @@ public class DashboardService : IDashboardService
         var engineerIds = engineers.Select(e => e.Id).ToList();
 
         var adjustments = await _db.EngineerMonthlyAdjustments
+            .AsNoTracking()
             .Where(a => engineerIds.Contains(a.EngineerId) && a.Year == year && a.Month == month)
             .ToListAsync();
 
         var monthlyWorkDays = await _db.MonthlyWorkDays
+            .AsNoTracking()
             .FirstOrDefaultAsync(m => m.Year == year && m.Month == month);
 
+        var activeThemeIds = await _db.Themes
+            .AsNoTracking()
+            .Where(t => ThemeStatus.ActiveStatuses.Contains(t.Status))
+            .Select(t => t.Id)
+            .ToListAsync();
+
         var allocations = await _db.EngineerThemeAllocations
-            .Where(a => engineerIds.Contains(a.EngineerId) && a.Year == year && a.Month == month)
+            .AsNoTracking()
+            .Where(a => engineerIds.Contains(a.EngineerId) && a.Year == year && a.Month == month
+                        && activeThemeIds.Contains(a.ThemeId))
             .ToListAsync();
 
         return engineers.Select(e =>
@@ -60,6 +71,7 @@ public class DashboardService : IDashboardService
     public async Task<List<ThemeProgressDto>> GetThemeProgressAsync()
     {
         var themes = await _db.Themes
+            .AsNoTracking()
             .Where(t => ThemeStatus.ActiveStatuses.Contains(t.Status))
             .OrderByDescending(t => t.OrderDate)
             .ToListAsync();
@@ -67,6 +79,7 @@ public class DashboardService : IDashboardService
         var themeIds = themes.Select(t => t.Id).ToList();
 
         var allAllocations = await _db.EngineerThemeAllocations
+            .AsNoTracking()
             .Include(a => a.Engineer).ThenInclude(e => e.Grade)
             .Where(a => themeIds.Contains(a.ThemeId))
             .ToListAsync();
