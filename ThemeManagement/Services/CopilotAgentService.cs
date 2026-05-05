@@ -261,6 +261,7 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                             engineerName = e.Name,
                             grade = e.Grade.Name,
                             unitSalePrice = e.Grade.UnitSalePrice,
+                            unitCostPrice = e.Grade.UnitCostPrice,
                             skills = e.Skills.Select(es => new
                             {
                                 skillId = es.SkillId,
