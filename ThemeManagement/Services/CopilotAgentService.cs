@@ -183,6 +183,7 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                         name = e.Name,
                         grade = e.Grade.Name,
                         unitSalePrice = e.Grade.UnitSalePrice,
+                        unitCostPrice = e.Grade.UnitCostPrice,
                         skills = e.Skills.Select(es => new
                         {
                             skillId = es.SkillId,
@@ -192,7 +193,7 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                     }).ToList();
                 },
                 ReadOnlyTool("get_active_engineers",
-                    "アクティブなエンジニアの一覧を取得します。エンジニアID、名前、等級、時間単価、スキル情報が含まれます。")),
+                    "アクティブなエンジニアの一覧を取得します。エンジニアID、名前、等級、販売単価(unitSalePrice)、原価単価(unitCostPrice)、スキル情報が含まれます。社用開発テーマのコスト計算にはunitCostPriceを使用してください。")),
 
             // ─── エンジニア稼働余力取得 ───
             AIFunctionFactory.Create(
@@ -240,7 +241,7 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                 {
                     using var scope = _scopeFactory.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    var allocationService = scope.ServiceProvider.GetRequiredService<IAllocationService>();
+                    var capacitySettings = scope.ServiceProvider.GetRequiredService<ICapacitySettings>();
 
                     var engineers = await db.Engineers
                         .AsNoTracking()
@@ -250,10 +251,29 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                         .OrderBy(e => e.Name)
                         .ToListAsync();
 
+                    var engineerIds = engineers.Select(e => e.Id).ToList();
+
+                    // Batch-load work days, adjustments, and allocations in 3 queries (no N+1)
+                    var monthlyWorkDays = await db.MonthlyWorkDays
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(m => m.Year == year && m.Month == month);
+
+                    var adjustments = await db.EngineerMonthlyAdjustments
+                        .AsNoTracking()
+                        .Where(a => engineerIds.Contains(a.EngineerId) && a.Year == year && a.Month == month)
+                        .ToListAsync();
+
+                    var allocations = await db.EngineerThemeAllocations
+                        .AsNoTracking()
+                        .Where(a => engineerIds.Contains(a.EngineerId) && a.Year == year && a.Month == month)
+                        .ToListAsync();
+
                     return engineers.Select(e =>
                     {
-                        var maxHours = allocationService.GetMaxDevelopableHours(e.Id, year, month);
-                        var allocated = allocationService.GetTotalAllocatedHoursByEngineer(e.Id, year, month);
+                        var adjustment = adjustments.FirstOrDefault(a => a.EngineerId == e.Id);
+                        int workDays = adjustment?.WorkDays ?? monthlyWorkDays?.WorkDays ?? 0;
+                        var maxHours = workDays * 8m * capacitySettings.Coefficient;
+                        var allocated = allocations.Where(a => a.EngineerId == e.Id).Sum(a => a.AllocatedHours);
                         var remaining = maxHours - allocated;
                         return new
                         {
@@ -276,7 +296,7 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                     }).ToList();
                 },
                 ReadOnlyTool("get_all_engineers_availability",
-                    "特定の年月における全アクティブエンジニアの稼働余力一覧を取得します。スキル情報や稼働率も含まれます。")),
+                    "特定の年月における全アクティブエンジニアの稼働余力一覧を取得します。スキル情報や稼働率も含まれます。社用開発テーマにはunitCostPriceを使用してください。")),
 
             // ─── テーマの割り当て状況取得 ───
             AIFunctionFactory.Create(
@@ -286,34 +306,51 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                     [Description("月（1〜12）")] int month) =>
                 {
                     using var scope = _scopeFactory.CreateScope();
-                    var allocationService = scope.ServiceProvider.GetRequiredService<IAllocationService>();
                     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
                     var theme = await db.Themes.AsNoTracking().FirstOrDefaultAsync(t => t.Id == themeId);
                     if (theme == null)
                         return (object)new { error = $"テーマID {themeId} が見つかりません" };
 
-                    var allocations = await allocationService.GetByThemeAsync(themeId, year, month);
-                    var totalCost = allocationService.GetTotalAllocatedCostByTheme(themeId);
+                    bool useCostPrice = theme.OrderType == "社用開発";
+
+                    // Fetch all allocations for the theme (all months) to compute total cost
+                    // Only include rows where navigation properties are fully loaded (data integrity guard)
+                    var allAllocations = (await db.EngineerThemeAllocations
+                        .AsNoTracking()
+                        .Include(a => a.Engineer).ThenInclude(e => e.Grade)
+                        .Where(a => a.ThemeId == themeId)
+                        .ToListAsync())
+                        .Where(a => a.Engineer?.Grade != null)
+                        .ToList();
+
+                    // Fetch this month's allocations for the detail rows
+                    var monthAllocations = allAllocations
+                        .Where(a => a.Year == year && a.Month == month)
+                        .ToList();
+
+                    var totalCost = allAllocations.Sum(a =>
+                        a.AllocatedHours * (useCostPrice ? a.Engineer.Grade.UnitCostPrice : a.Engineer.Grade.UnitSalePrice));
 
                     return (object)new
                     {
                         themeId,
                         themeName = theme.Name,
+                        orderType = theme.OrderType,
                         orderAmount = theme.OrderAmount,
                         totalAllocatedCost = totalCost,
                         remainingBudget = theme.OrderAmount - totalCost,
-                        allocations = allocations.Select(a => new
+                        allocations = monthAllocations.Select(a => new
                         {
-                            engineerName = a.EngineerName,
-                            grade = a.GradeName,
+                            engineerName = a.Engineer.Name,
+                            grade = a.Engineer.Grade.Name,
                             hours = a.AllocatedHours,
-                            cost = a.AllocatedHours * a.UnitSalePrice,
+                            cost = a.AllocatedHours * (useCostPrice ? a.Engineer.Grade.UnitCostPrice : a.Engineer.Grade.UnitSalePrice),
                         }).ToList(),
                     };
                 },
                 ReadOnlyTool("get_theme_allocations",
-                    "テーマの特定月における割り当て状況（割り当てエンジニア・時間・コスト・予算残高）を取得します。")),
+                    "テーマの特定月における割り当て状況（割り当てエンジニア・時間・コスト・予算残高）を取得します。社用開発テーマは原価（unitCostPrice）でコストを計算します。")),
 
             // ─── エンジニアをテーマにアサイン ───
             AIFunctionFactory.Create(
@@ -324,6 +361,12 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                     [Description("月（1〜12）")] int month,
                     [Description("割り当て時間（時間単位、0より大きい値）")] decimal hours) =>
                 {
+                    // Validate inputs before any DB access
+                    if (month < 1 || month > 12)
+                        return new { success = false, message = $"月は 1〜12 の範囲で指定してください（指定値: {month}）" };
+                    if (year < 2000 || year > 2100)
+                        return new { success = false, message = $"年は 2000〜2100 の範囲で指定してください（指定値: {year}）" };
+
                     using var scope = _scopeFactory.CreateScope();
                     var allocationService = scope.ServiceProvider.GetRequiredService<IAllocationService>();
                     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
