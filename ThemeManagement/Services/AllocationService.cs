@@ -113,16 +113,19 @@ public class AllocationService : IAllocationService
                 $"{engineer?.Name} の {year}/{month:D2} 稼働上限（{maxHours:F1}h）を超えます（入力後合計: {currentEngTotal + hours:F1}h）");
         }
 
-        // テーマ受注金額チェック
+        // テーマ受注金額チェック（受注区分が「その他」の場合はスキップ）
         var theme = await _db.Themes.FindAsync(themeId)
             ?? throw new BusinessRuleException("テーマが見つかりません");
-        var eng = await _db.Engineers.AsNoTracking().Include(e => e.Grade).FirstAsync(e => e.Id == engineerId);
-        var addedCost = hours * eng.Grade.UnitSalePrice;
-        var currentCost = GetTotalAllocatedCostByTheme(themeId, excludeId);
-        if (currentCost + addedCost > theme.OrderAmount)
+        if (theme.OrderType != "その他")
         {
-            throw new BusinessRuleException(
-                $"{theme.Name} の受注金額（{theme.OrderAmount:N0}円）を超えます（入力後累計: {currentCost + addedCost:N0}円）");
+            var eng = await _db.Engineers.AsNoTracking().Include(e => e.Grade).FirstAsync(e => e.Id == engineerId);
+            var addedCost = hours * eng.Grade.UnitSalePrice;
+            var currentCost = GetTotalAllocatedCostByTheme(themeId, excludeId);
+            if (currentCost + addedCost > theme.OrderAmount)
+            {
+                throw new BusinessRuleException(
+                    $"{theme.Name} の受注金額（{theme.OrderAmount:N0}円）を超えます（入力後累計: {currentCost + addedCost:N0}円）");
+            }
         }
 
         if (existing == null)

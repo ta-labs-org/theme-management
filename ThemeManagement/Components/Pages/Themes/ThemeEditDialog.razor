@@ -17,7 +17,7 @@
                            Required="true" DateFormat="yyyy/MM/dd" />
             <MudDatePicker Label="完了予定日" Date="_estimatedDate" DateChanged="d => { _estimatedDate = d; if (d.HasValue) Theme.EstimatedCompletionDate = DateOnly.FromDateTime(d.Value); }"
                            Required="true" DateFormat="yyyy/MM/dd" />
-            <MudNumericField T="decimal" @bind-Value="Theme.OrderAmount" Label="受注金額（円）" Min="1" Required="true" />
+            <MudNumericField T="decimal" @bind-Value="Theme.OrderAmount" Label="受注金額（円）" Min="0" />
             <MudSelect T="string" @bind-Value="Theme.Status" Label="状態" Required="true">
                 <MudSelectItem T="string" Value="@ThemeStatus.Quoting">見積中</MudSelectItem>
                 <MudSelectItem T="string" Value="@ThemeStatus.Confirmed">受注確定</MudSelectItem>
@@ -94,11 +94,6 @@
         if (string.IsNullOrWhiteSpace(Theme.Name))
         {
             Snackbar.Add("テーマ名を入力してください", Severity.Warning);
-            return;
-        }
-        if (Theme.OrderAmount <= 0)
-        {
-            Snackbar.Add("受注金額は0より大きい値を入力してください", Severity.Warning);
             return;
         }
         Theme.Tags = string.Join(",", _tags);
