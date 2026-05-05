@@ -37,6 +37,18 @@
         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PictureAsPdf"
                    Href="@($"/api/report/pdf?type=forecast&fiscalYear={_fiscalYear}&half={(_isFirstHalf ? "first" : "second")}")"
                    Target="_blank" Disabled="!_loaded">PDF出力</MudButton>
+        <MudDivider Vertical="true" FlexItem="true" />
+        <MudSelect T="string" @bind-Value="_sortKey" Label="テーマ並び替え" Style="width:150px" Disabled="!_loaded">
+            <MudSelectItem T="string" Value="@("OrderDate")">受注日</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Name")">テーマ名</MudSelectItem>
+            <MudSelectItem T="string" Value="@("EstimatedCompletionDate")">完了予定日</MudSelectItem>
+            <MudSelectItem T="string" Value="@("OrderAmount")">受注金額</MudSelectItem>
+        </MudSelect>
+        <MudTooltip Text="@(_sortAscending ? "昇順" : "降順")">  
+            <MudIconButton Icon="@(_sortAscending ? Icons.Material.Filled.ArrowUpward : Icons.Material.Filled.ArrowDownward)"
+                           OnClick="() => _sortAscending = !_sortAscending"
+                           Disabled="!_loaded" />
+        </MudTooltip>
     </MudStack>
 </MudPaper>
 
@@ -65,7 +77,7 @@
                     <tbody>
                         @foreach (var eng in _engineers)
                         {
-                            var engThemes = _themes.ToList();
+                            var engThemes = SortedThemes.ToList();
                             @for (int ti = 0; ti < engThemes.Count; ti++)
                             {
                                 var theme = engThemes[ti];
@@ -145,7 +157,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var theme in _themes)
+                        @foreach (var theme in SortedThemes)
                         {
                             var themeEngineers = _engineers.ToList();
                             var currentThemeId = theme.Id;
@@ -260,6 +272,17 @@
     private List<Engineer> _engineers = new();
     private List<Theme> _themes = new();
     private List<(int Year, int Month)> _periodMonths = new();
+
+    private string _sortKey = "OrderDate";
+    private bool _sortAscending = false;
+
+    private IEnumerable<Theme> SortedThemes => _sortKey switch
+    {
+        "Name"                    => _sortAscending ? _themes.OrderBy(t => t.Name)                    : _themes.OrderByDescending(t => t.Name),
+        "EstimatedCompletionDate" => _sortAscending ? _themes.OrderBy(t => t.EstimatedCompletionDate) : _themes.OrderByDescending(t => t.EstimatedCompletionDate),
+        "OrderAmount"             => _sortAscending ? _themes.OrderBy(t => t.OrderAmount)             : _themes.OrderByDescending(t => t.OrderAmount),
+        _                         => _sortAscending ? _themes.OrderBy(t => t.OrderDate)               : _themes.OrderByDescending(t => t.OrderDate),
+    };
 
     // Key: (EngineerId, ThemeId, Year, Month)
     private Dictionary<(int, int, int, int), decimal> _allocMap = new();
