@@ -116,6 +116,8 @@ public class AllocationService : IAllocationService
         // テーマ受注金額チェック（受注区分が「その他」の場合はスキップ）
         var theme = await _db.Themes.FindAsync(themeId)
             ?? throw new BusinessRuleException("テーマが見つかりません");
+        if (theme.IsLocked)
+            throw new BusinessRuleException($"「{theme.Name}」はロックされているため、稼働予定を変更できません");
         if (theme.OrderType != "その他")
         {
             var eng = await _db.Engineers.AsNoTracking().Include(e => e.Grade).FirstAsync(e => e.Id == engineerId);
@@ -153,6 +155,9 @@ public class AllocationService : IAllocationService
         var allocation = await _db.EngineerThemeAllocations.FindAsync(id);
         if (allocation != null)
         {
+            var theme = await _db.Themes.FindAsync(allocation.ThemeId);
+            if (theme?.IsLocked == true)
+                throw new BusinessRuleException($"「{theme.Name}」はロックされているため、稼働予定を変更できません");
             _db.EngineerThemeAllocations.Remove(allocation);
             await _db.SaveChangesAsync();
         }
@@ -169,6 +174,11 @@ public class AllocationService : IAllocationService
 
     public async Task UpsertAllocationNoValidationAsync(int engineerId, int themeId, int year, int month, decimal hours)
     {
+        var theme = await _db.Themes.FindAsync(themeId)
+            ?? throw new BusinessRuleException("テーマが見つかりません");
+        if (theme.IsLocked)
+            throw new BusinessRuleException($"「{theme.Name}」はロックされているため、稼働予定を変更できません");
+
         var existing = await _db.EngineerThemeAllocations
             .FirstOrDefaultAsync(a => a.EngineerId == engineerId && a.ThemeId == themeId
                                       && a.Year == year && a.Month == month);
@@ -234,6 +244,10 @@ public class AllocationService : IAllocationService
 
     public async Task<int> CopyFromPreviousMonthAsync(int themeId, int year, int month)
     {
+        var theme = await _db.Themes.FindAsync(themeId);
+        if (theme?.IsLocked == true)
+            throw new BusinessRuleException($"「{theme.Name}」はロックされているため、稼働予定を変更できません");
+
         // 前月の計算
         var prevDate = new DateTime(year, month, 1).AddMonths(-1);
         int prevYear = prevDate.Year;

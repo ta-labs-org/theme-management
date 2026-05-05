@@ -77,6 +77,11 @@
                            Href="@($"/themes/{context.Id}/allocation")" />
             <MudIconButton Icon="@Icons.Material.Filled.Psychology" Size="Size.Small" Color="Color.Secondary"
                            OnClick="() => OpenRequiredSkillsDialog(context)" />
+            <MudIconButton Icon="@(context.IsLocked ? Icons.Material.Filled.Lock : Icons.Material.Filled.LockOpen)"
+                           Size="Size.Small"
+                           Color="@(context.IsLocked ? Color.Warning : Color.Default)"
+                           Title="@(context.IsLocked ? "ロック解除" : "稼働予定をロック")"
+                           OnClick="() => ToggleLockAsync(context)" />
         </MudTd>
     </RowTemplate>
     <NoRecordsContent><MudText>テーマが登録されていません</MudText></NoRecordsContent>
@@ -155,6 +160,14 @@
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
         await DialogService.ShowAsync<ThemeRequiredSkillsDialog>($"必要スキル管理 - {theme.Name}", parameters, options);
+    }
+
+    private async Task ToggleLockAsync(Theme theme)
+    {
+        var newLocked = await ThemeService.ToggleLockAsync(theme.Id);
+        theme.IsLocked = newLocked;
+        var msg = newLocked ? $"「{theme.Name}」の稼働予定をロックしました" : $"「{theme.Name}」のロックを解除しました";
+        Snackbar.Add(msg, newLocked ? Severity.Warning : Severity.Success);
     }
 
     private static Color StatusColor(string status) => status switch

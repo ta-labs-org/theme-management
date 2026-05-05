@@ -10,6 +10,7 @@ public interface IThemeService
     Task<Theme?> GetByIdAsync(int id);
     Task SaveAsync(Theme theme);
     Task<(int Added, int Updated)> BulkImportAsync(IEnumerable<Theme> themes);
+    Task<bool> ToggleLockAsync(int themeId);
 }
 
 public class ThemeService : IThemeService
@@ -78,5 +79,14 @@ public class ThemeService : IThemeService
         }
         await _db.SaveChangesAsync();
         return (added, updated);
+    }
+
+    public async Task<bool> ToggleLockAsync(int themeId)
+    {
+        var theme = await _db.Themes.FindAsync(themeId);
+        if (theme == null) return false;
+        theme.IsLocked = !theme.IsLocked;
+        await _db.SaveChangesAsync();
+        return theme.IsLocked;
     }
 }
