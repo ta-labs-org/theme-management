@@ -31,7 +31,7 @@ else
         <MudText Typo="Typo.subtitle1" Class="mb-2">エンジニア別 月別割当工数 (h)</MudText>
         <MudChart ChartType="ChartType.Line"
                   ChartSeries="@_series"
-                  XAxisLabels="@_labels"
+                  ChartLabels="@_labels"
                   Width="100%" Height="350px" />
     </MudPaper>
 
@@ -40,7 +40,7 @@ else
         <MudText Typo="Typo.subtitle1" Class="mb-2">チーム合計 稼働上限 vs 割当済み (h)</MudText>
         <MudChart ChartType="ChartType.Bar"
                   ChartSeries="@_teamSeries"
-                  XAxisLabels="@_labels"
+                  ChartLabels="@_labels"
                   Width="100%" Height="280px" />
     </MudPaper>
 

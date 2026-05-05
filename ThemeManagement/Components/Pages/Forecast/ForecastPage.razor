@@ -100,6 +100,7 @@
                                         <td class="cell-input @cellCss">
                                             <input type="number" class="alloc-input" min="0" step="5"
                                                    value="@((int)GetAlloc(engId, themeId, cy, cm))"
+                                                   disabled="@theme.IsLocked"
                                                    @onchange="@(async e => await OnAllocChanged(engId, themeId, cy, cm, e.Value?.ToString()))" />
                                         </td>
                                     }
@@ -186,14 +187,21 @@
                                     <div class="theme-meta">
                                         <span class="amount">¥@(theme.OrderAmount.ToString("N0"))</span><br />
                                         <span>〆@(theme.EstimatedCompletionDate.ToString("yyyy/M"))</span>
-                                    </div>
-                                </td>
+                                    </div>                                    <div style="margin-top:4px;">
+                                        <MudTooltip Text="@(theme.IsLocked ? "ロック解除" : "稼働予定をロック")">
+                                            <MudIconButton Icon="@(theme.IsLocked ? Icons.Material.Filled.Lock : Icons.Material.Filled.LockOpen)"
+                                                           Size="Size.Small"
+                                                           Color="@(theme.IsLocked ? Color.Warning : Color.Default)"
+                                                           OnClick="@(async () => await ToggleThemeLockAsync(theme))" />
+                                        </MudTooltip>
+                                    </div>                                </td>
                                 <td class="cell-target-label">
                                     合計（目標）
                                     <MudIconButton Icon="@Icons.Material.Filled.AutoFixHigh"
                                                    Size="Size.Small" Color="Color.Primary"
                                                    aria-label="目標時間をエンジニアへ自動割り当て"
                                                    OnClick="@(async () => await AutoAssignAsync(currentThemeId))"
+                                                   Disabled="@theme.IsLocked"
                                                    Class="target-auto-btn" />
                                 </td>
                                 @foreach (var (y, m) in _periodMonths)
@@ -207,6 +215,7 @@
                                         <input type="number" class="alloc-input target-input" min="0" step="5"
                                                value="@((int)target)"
                                                title="@(target > 0 ? $"実績: {actual:F0}h / 差: {diff:+0;-0;0}h" : "")"
+                                               disabled="@theme.IsLocked"
                                                @onchange="@(async e => await OnTargetChanged(currentThemeId, cy, cm, e.Value?.ToString()))" />
                                         @if (target > 0 && diff != 0)
                                         {
@@ -233,6 +242,7 @@
                                         <td class="cell-input @cellCss">
                                             <input type="number" class="alloc-input" min="0" step="5"
                                                    value="@((int)GetAlloc(engId, themeId, cy, cm))"
+                                                   disabled="@theme.IsLocked"
                                                    @onchange="@(async e => await OnAllocChanged(engId, themeId, cy, cm, e.Value?.ToString()))" />
                                         </td>
                                     }
@@ -245,6 +255,7 @@
                                 <td colspan="@(_periodMonths.Count + 1)" class="cell-carryover-wide">
                                     <input type="text" class="carryover-input"
                                            value="@(GetCarryOver(theme.Id) == 0 ? "" : ((long)GetCarryOver(theme.Id)).ToString("N0"))"
+                                           disabled="@theme.IsLocked"
                                            @onchange="@(async e => await OnCarryOverChanged(theme.Id, e.Value?.ToString()))" />
                                 </td>
                             </tr>
@@ -301,6 +312,14 @@
 
     private IEnumerable<string> AllTags =>
         _themes.SelectMany(t => t.GetTagList()).Distinct().OrderBy(t => t);
+
+    private async Task ToggleThemeLockAsync(Theme theme)
+    {
+        var newLocked = await ThemeService.ToggleLockAsync(theme.Id);
+        theme.IsLocked = newLocked;
+        var msg = newLocked ? $"「{theme.Name}」の稼働予定をロックしました" : $"「{theme.Name}」のロックを解除しました";
+        Snackbar.Add(msg, newLocked ? Severity.Warning : Severity.Success);
+    }
 
     private IEnumerable<Theme> SortedThemes
     {

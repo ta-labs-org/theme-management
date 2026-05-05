@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
 
 <MudThemeProvider />
 <MudPopoverProvider />
@@ -8,7 +9,7 @@
 <MudLayout>
     <MudAppBar Elevation="1" Color="Color.Primary">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6" Class="ml-3">テーマ稼働管理システム</MudText>
+        <MudText Typo="Typo.h6" Class="ml-3">テーマ稼働予測システム</MudText>
         <MudSpacer />
         <AuthorizeView>
             <Authorized>
@@ -24,8 +25,9 @@
         </MudDrawerHeader>
         <NavMenu />
     </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-6">
+    <MudMainContent Class="@(IsAgentPage ? "main-content-shell--fullbleed" : null)">
+        <MudContainer MaxWidth="@(IsAgentPage ? MaxWidth.False : MaxWidth.ExtraLarge)"
+                      Class="@(IsAgentPage ? "app-body-container--fullbleed" : "pt-6")">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -33,5 +35,9 @@
 
 @code {
     private bool _drawerOpen = true;
+
+    private bool IsAgentPage =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("agent", StringComparison.OrdinalIgnoreCase);
+
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 }

@@ -12,6 +12,7 @@ public class Theme
     public decimal OrderAmount { get; set; }
     public string Status { get; set; } = "Active";
     public string Tags { get; set; } = string.Empty;
+    public bool IsLocked { get; set; } = false;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
