@@ -52,6 +52,7 @@ builder.Services.AddScoped<IDashboardSettingsService, DashboardSettingsService>(
 builder.Services.AddScoped<ISkillService, SkillService>();
 builder.Services.AddSingleton<IJapaneseBusinessDayService, JapaneseBusinessDayService>();
 builder.Services.AddSingleton<ICapacitySettings, CapacitySettings>();
+builder.Services.AddSingleton<ICopilotAgentSettings, CopilotAgentSettings>();
 builder.Services.AddScoped<IReportPdfService, ReportPdfService>();
 builder.Services.AddSingleton<ICopilotAgentService, CopilotAgentService>();
 

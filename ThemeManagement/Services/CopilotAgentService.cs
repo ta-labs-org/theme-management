@@ -20,14 +20,20 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ICapacitySettings _capacitySettings;
+    private readonly ICopilotAgentSettings _agentSettings;
     private readonly ILogger<CopilotAgentService> _logger;
     private CopilotClient? _client;
     private bool _started;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     private static readonly string SystemPrompt = """
-        あなたはエンジニア稼働管理システムのアシスタントです。
-        テーマ（案件）にエンジニアを最適にアサインするお手伝いをします。
+        あなたは「テーマ稼働予測システム」のアシスタントです。
+        このシステムは「どのテーマ（案件）に誰をどれだけ投入すれば、予定通りに終わるか」「エンジニアの稼働が多すぎたり少なすぎたりしないか」を把握するためのものです。
+
+        【重要】稼働データの解釈:
+        - 今月（{DateTime.Now:yyyy年M月}）以降のエンジニア比長・割り当てデータはすべて「予測」です。実績ではなく、今後の計画を示します。
+        - 過去の割り当て（今月未満）は実績です。
+        - 「予測」を変更することで、終了時期や稼働バランスをシミュレートできます。
 
         利用可能なツール:
         - get_active_themes: アクティブなテーマ（案件）の一覧を取得します
@@ -35,24 +41,33 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
         - get_engineer_availability: 特定の年月におけるエンジニアの稼働余力を取得します
         - get_all_engineers_availability: 特定の年月における全エンジニアの稼働余力を一覧で取得します
         - get_theme_allocations: テーマの既存割り当て状況を取得します
-        - assign_engineer_to_theme: エンジニアをテーマに割り当てます
+        - assign_engineer_to_theme: エンジニアをテーマに割り当てます（予測値の設定）
 
-        アサイン推奨時の考慮事項:
+        アサイン・予測提案時の考慮事項:
         1. エンジニアの残余稼働時間（余力）を確認する
         2. テーマの必要スキルとエンジニアのスキルをマッチングする
         3. スキルレベル（エンジニアのレベル >= テーマの要求レベル）を確認する
         4. テーマの受注金額上限と割り当てコストを確認する（ただし、OrderType が「その他」のテーマではこの受注金額上限チェックは不要）
+        5. テーマの完了予定日までに必要工数がまかなえるかを確認する
+
+        テーマのコスト・時間集計に関する注意事項:
+        - get_theme_allocations で取得したデータにはクローズ済み（status が "完了" または "中止" 等のアクティブでない）テーマへの割り当ても含まれる場合がある
+        - 稼働余力や残予算を計算する際は、アクティブなテーマ（status が "進行中" 等の稼働中のもの）への割り当て時間のみを集計すること
+        - クローズ済みテーマへの割り当て時間はエンジニアの現在の稼働余力の計算に含めないこと
 
         ユーザーがアサインを依頼したら、最適なエンジニアを提案し、確認後に assign_engineer_to_theme を実行してください。
         """;
 
+
     public CopilotAgentService(
         IServiceScopeFactory scopeFactory,
         ICapacitySettings capacitySettings,
+        ICopilotAgentSettings agentSettings,
         ILogger<CopilotAgentService> logger)
     {
         _scopeFactory = scopeFactory;
         _capacitySettings = capacitySettings;
+        _agentSettings = agentSettings;
         _logger = logger;
     }
 
@@ -77,9 +92,10 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
 
         var tools = BuildTools();
 
+        _logger.LogInformation("Copilot セッション作成: model={Model}", _agentSettings.Model);
         var session = await _client!.CreateSessionAsync(new SessionConfig
         {
-            Model = "gpt-4o",
+            Model = _agentSettings.Model,
             Streaming = true,
             SystemMessage = new SystemMessageConfig
             {
@@ -87,9 +103,10 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                 Content = SystemPrompt,
             },
             Tools = tools,
+            OnPermissionRequest = PermissionHandler.ApproveAll,
         }, cancellationToken);
 
-        return new CopilotAgentSession(session);
+        return new CopilotAgentSession(session, _logger);
     }
 
     private async Task EnsureStartedAsync(CancellationToken cancellationToken = default)
@@ -107,6 +124,7 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
         }
         catch
         {
+            _logger.LogError("Copilot クライアントの起動に失敗しました");
             _client = null;
             _started = false;
             throw;
@@ -392,6 +410,7 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                     }
                     catch (Exception ex)
                     {
+                        _logger.LogError(ex, "assign_engineer_to_theme: 割り当て処理中にエラーが発生しました。 engineerId={EngineerId}, themeId={ThemeId}, year={Year}, month={Month}, hours={Hours}", engineerId, themeId, year, month, hours);
                         return new { success = false, message = ex.Message };
                     }
                 },
@@ -420,10 +439,12 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
 public class CopilotAgentSession : IAsyncDisposable
 {
     private readonly CopilotSession _session;
+    private readonly ILogger _logger;
 
-    public CopilotAgentSession(CopilotSession session)
+    public CopilotAgentSession(CopilotSession session, ILogger logger)
     {
         _session = session;
+        _logger = logger;
     }
 
     public string SessionId => _session.SessionId;
@@ -450,6 +471,7 @@ public class CopilotAgentSession : IAsyncDisposable
                     subscription?.Dispose();
                     break;
                 case SessionErrorEvent err:
+                    _logger.LogError("Copilot セッションエラーイベント: {Message}", err.Data.Message);
                     channel.Writer.TryComplete(new InvalidOperationException(err.Data.Message));
                     subscription?.Dispose();
                     break;
