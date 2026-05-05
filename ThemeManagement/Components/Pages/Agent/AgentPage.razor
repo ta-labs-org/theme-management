@@ -1,0 +1,300 @@
+@page "/agent"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using ThemeManagement.Services
+@inject ICopilotAgentService AgentService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>アサインエージェント</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-3">
+    <MudIcon Icon="@Icons.Material.Filled.SmartToy" Class="mr-2" />
+    アサインエージェント（GitHub Copilot）
+</MudText>
+
+<MudText Typo="Typo.body2" Class="mb-4" Color="Color.Secondary">
+    GitHub Copilot を使って、テーマへのエンジニア最適アサインを支援するエージェントです。
+    「〇〇テーマに来月エンジニアをアサインして」などと話しかけてみてください。
+</MudText>
+
+@if (_initError != null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <MudText Typo="Typo.body1"><strong>エージェントの起動に失敗しました</strong></MudText>
+        <MudText Typo="Typo.body2" Class="mt-1">@_initError</MudText>
+        <MudText Typo="Typo.caption" Class="mt-2">
+            GitHub Copilot CLI（gh copilot）がインストールされているか確認してください。
+            インストール方法: <code>gh extension install github/gh-copilot</code>
+        </MudText>
+    </MudAlert>
+}
+else
+{
+    <MudPaper Elevation="2" Style="height: 520px; display: flex; flex-direction: column; overflow: hidden;">
+        <!-- チャット履歴 -->
+        <div style="flex: 1; overflow-y: auto; padding: 16px;" data-messages-container @ref="_messagesContainer">
+            @if (_messages.Count == 0 && !_isLoading)
+            {
+                <div style="display: flex; justify-content: center; align-items: center; height: 100%; opacity: 0.5;">
+                    <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.Chat" Style="font-size: 48px;" />
+                        <MudText Typo="Typo.body1">エージェントに話しかけてみてください</MudText>
+                        <MudText Typo="Typo.caption">例: 「来月アサイン可能なエンジニアを教えて」</MudText>
+                        <MudText Typo="Typo.caption">例: 「テーマ一覧を見せて」</MudText>
+                        <MudText Typo="Typo.caption">例: 「〇〇テーマに稼働余力があるエンジニアをアサインして」</MudText>
+                    </MudStack>
+                </div>
+            }
+
+            @foreach (var msg in _messages)
+            {
+                <div style="margin-bottom: 16px; display: flex; @(msg.IsUser ? "justify-content: flex-end;" : "justify-content: flex-start;")">
+                    <div style="max-width: 80%;">
+                        @if (!msg.IsUser)
+                        {
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                                <MudIcon Icon="@Icons.Material.Filled.SmartToy" Style="font-size: 16px;" Color="Color.Primary" />
+                                <MudText Typo="Typo.caption" Color="Color.Primary"><strong>アサインエージェント</strong></MudText>
+                            </MudStack>
+                        }
+                        <MudPaper Elevation="0"
+                                  Style="@GetMessageBubbleStyle(msg.IsUser)">
+                            @if (msg.IsUser)
+                            {
+                                <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@msg.Content</MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@msg.Content</MudText>
+                            }
+                        </MudPaper>
+                        <MudText Typo="Typo.caption" Style="@GetTimestampStyle(msg.IsUser)">
+                            @msg.Timestamp.ToString("HH:mm")
+                        </MudText>
+                    </div>
+                </div>
+            }
+
+            @if (_isStreaming && _streamingMessage.Length > 0)
+            {
+                <div style="margin-bottom: 16px; display: flex; justify-content: flex-start;">
+                    <div style="max-width: 80%;">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                            <MudIcon Icon="@Icons.Material.Filled.SmartToy" Style="font-size: 16px;" Color="Color.Primary" />
+                            <MudText Typo="Typo.caption" Color="Color.Primary"><strong>アサインエージェント</strong></MudText>
+                        </MudStack>
+                        <MudPaper Elevation="0"
+                                  Style="padding: 10px 14px; border-radius: 12px; background-color: var(--mud-palette-surface); border: 1px solid var(--mud-palette-lines-default);">
+                            <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@_streamingMessage.ToString()<span style="animation: blink 1s infinite;">▌</span></MudText>
+                        </MudPaper>
+                    </div>
+                </div>
+            }
+
+            @if (_isLoading && !_isStreaming)
+            {
+                <div style="margin-bottom: 16px; display: flex; justify-content: flex-start;">
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Class="ml-2 mt-1" Style="opacity: 0.6;">考え中...</MudText>
+                </div>
+            }
+        </div>
+
+        <!-- 入力エリア -->
+        <MudDivider />
+        <div style="padding: 12px 16px;">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudTextField @ref="_inputField"
+                              @bind-Value="_inputText"
+                              Placeholder="メッセージを入力してください..."
+                              Variant="Variant.Outlined"
+                              Lines="3"
+                              Disabled="@(_isLoading || _initError != null)"
+                              Style="flex: 1;"
+                              OnKeyDown="HandleKeyDown" />
+                <MudIconButton Icon="@Icons.Material.Filled.Send"
+                               Color="Color.Primary"
+                               Variant="Variant.Filled"
+                               OnClick="SendMessage"
+                               Disabled="@(_isLoading || string.IsNullOrWhiteSpace(_inputText) || _initError != null)"
+                               Size="Size.Large" />
+            </MudStack>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-1">
+                <MudText Typo="Typo.caption" Style="opacity: 0.5;">Shift+Enter で改行、Enter で送信</MudText>
+                @if (_messages.Count > 0)
+                {
+                    <MudButton Variant="Variant.Text"
+                               StartIcon="@Icons.Material.Filled.Refresh"
+                               Size="Size.Small"
+                               OnClick="ResetSession">
+                        セッションリセット
+                    </MudButton>
+                }
+            </MudStack>
+        </div>
+    </MudPaper>
+}
+
+<style>
+    @@keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
+</style>
+
+@code {
+    private record ChatMessage(string Content, bool IsUser, DateTime Timestamp);
+
+    private static string GetMessageBubbleStyle(bool isUser) =>
+        isUser
+            ? "padding: 10px 14px; border-radius: 12px; background-color: var(--mud-palette-primary); color: white;"
+            : "padding: 10px 14px; border-radius: 12px; background-color: var(--mud-palette-surface); border: 1px solid var(--mud-palette-lines-default);";
+
+    private static string GetTimestampStyle(bool isUser) =>
+        isUser
+            ? "opacity: 0.6; margin-top: 2px; text-align: right;"
+            : "opacity: 0.6; margin-top: 2px;";
+
+    private List<ChatMessage> _messages = [];
+    private string _inputText = string.Empty;
+    private bool _isLoading;
+    private bool _isStreaming;
+    private System.Text.StringBuilder _streamingMessage = new();
+    private string? _initError;
+    private CopilotAgentSession? _session;
+    private ElementReference _messagesContainer;
+    private MudTextField<string>? _inputField;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var available = await AgentService.IsAvailableAsync();
+            if (!available)
+            {
+                _initError = "GitHub Copilot CLI に接続できませんでした。";
+            }
+        }
+        catch (Exception ex)
+        {
+            _initError = ex.Message;
+        }
+    }
+
+    private async Task EnsureSessionAsync()
+    {
+        if (_session == null)
+        {
+            _session = await AgentService.CreateSessionAsync();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        var text = _inputText.Trim();
+        if (string.IsNullOrEmpty(text) || _isLoading) return;
+
+        _inputText = string.Empty;
+        _isLoading = true;
+        _isStreaming = false;
+        _streamingMessage.Clear();
+
+        _messages.Add(new ChatMessage(text, IsUser: true, DateTime.Now));
+        await ScrollToBottomAsync();
+        StateHasChanged();
+
+        _cts = new CancellationTokenSource();
+
+        try
+        {
+            await EnsureSessionAsync();
+
+            _isStreaming = true;
+            await foreach (var chunk in _session!.SendAsync(text, _cts.Token))
+            {
+                _streamingMessage.Append(chunk);
+                await InvokeAsync(StateHasChanged);
+                await ScrollToBottomAsync();
+            }
+
+            if (_streamingMessage.Length > 0)
+            {
+                _messages.Add(new ChatMessage(_streamingMessage.ToString(), IsUser: false, DateTime.Now));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (_streamingMessage.Length > 0)
+            {
+                _messages.Add(new ChatMessage(_streamingMessage.ToString() + "\n\n[キャンセルされました]", IsUser: false, DateTime.Now));
+            }
+        }
+        catch (Exception ex)
+        {
+            _messages.Add(new ChatMessage($"エラーが発生しました: {ex.Message}", IsUser: false, DateTime.Now));
+            Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
+            // セッションをリセット
+            if (_session != null)
+            {
+                await _session.DisposeAsync();
+                _session = null;
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+            _isStreaming = false;
+            _streamingMessage.Clear();
+            _cts?.Dispose();
+            _cts = null;
+            await InvokeAsync(StateHasChanged);
+            await ScrollToBottomAsync();
+        }
+    }
+
+    private async Task ResetSession()
+    {
+        _cts?.Cancel();
+        if (_session != null)
+        {
+            await _session.DisposeAsync();
+            _session = null;
+        }
+        _messages.Clear();
+        _isLoading = false;
+        _isStreaming = false;
+        _streamingMessage.Clear();
+        Snackbar.Add("セッションをリセットしました", Severity.Info);
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "var el = document.querySelector('[data-messages-container]'); if(el) el.scrollTop = el.scrollHeight;");
+        }
+        catch { /* ignore */ }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        if (_session != null)
+        {
+            await _session.DisposeAsync();
+        }
+    }
+}
