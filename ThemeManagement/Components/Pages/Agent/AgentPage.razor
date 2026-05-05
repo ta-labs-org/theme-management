@@ -242,10 +242,11 @@ else
                 _messages.Add(new ChatMessage(_streamingMessage.ToString() + "\n\n[キャンセルされました]", IsUser: false, DateTime.Now));
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _messages.Add(new ChatMessage($"エラーが発生しました: {ex.Message}", IsUser: false, DateTime.Now));
-            Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
+            const string userErrorMessage = "エラーが発生しました。しばらくしてから再試行してください。";
+            _messages.Add(new ChatMessage(userErrorMessage, IsUser: false, DateTime.Now));
+            Snackbar.Add(userErrorMessage, Severity.Error);
             // セッションをリセット
             if (_session != null)
             {
