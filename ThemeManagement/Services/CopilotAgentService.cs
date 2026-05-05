@@ -87,7 +87,6 @@ public class CopilotAgentService : ICopilotAgentService, IAsyncDisposable
                 Content = SystemPrompt,
             },
             Tools = tools,
-            OnPermissionRequest = PermissionHandler.ApproveAll,
         }, cancellationToken);
 
         return new CopilotAgentSession(session);
