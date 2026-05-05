@@ -90,6 +90,21 @@ html, body {
     opacity: 0.5;
 }
 
+/* グループ枠線 */
+tbody.eng-group td:last-child  { border-right: 2px solid #546e7a !important; }
+tbody.eng-group tr:last-child td  { border-bottom: 2px solid #546e7a !important; }
+
+tbody.theme-group td:last-child  { border-right: 2px solid #546e7a !important; }
+tbody.theme-group tr:last-child td  { border-bottom: 2px solid #546e7a !important; }
+
+/* グループ間スペーサー */
+.group-gap {
+    height: 8px;
+    background: transparent;
+    border: none !important;
+    padding: 0 !important;
+}
+
 .row-eng-last td {
     border-bottom: 2px solid #90caf9;
 }
@@ -139,7 +154,7 @@ html, body {
     font-size: 0.78rem;
     text-align: center;
     color: #00695c;
-    border-bottom: 2px solid #80deea;
+    border-bottom: 1px solid #e0e0e0;
     font-style: italic;
 }
 
@@ -183,6 +198,24 @@ html, body {
     color: #9e9e9e;
 }
 
+/* テーマコスト超過警告（エンジニアビューのテーマ行） */
+.cell-theme-over-budget {
+    background: #ffebee !important;
+}
+.cell-theme-over-budget .alloc-input {
+    background: #ffcdd2 !important;
+    border-color: #e53935 !important;
+}
+
+/* エンジニア稼働超過警告（テーマビューのエンジニア行） */
+.cell-eng-over-capacity {
+    background: #ffebee !important;
+}
+.cell-eng-over-capacity .alloc-input {
+    background: #ffcdd2 !important;
+    border-color: #e53935 !important;
+}
+
 /* 完了予定月超過セル（入力可・警告のみ） */
 .cell-past-deadline {
     background: #fff3e0 !important;
@@ -202,7 +235,7 @@ html, body {
     border-top: 2px solid #a5d6a7;
     padding: 7px 10px;
     letter-spacing: 0.01em;
-}
+
 .row-over-budget td {
     background: #ffebee !important;
     color: #b71c1c !important;

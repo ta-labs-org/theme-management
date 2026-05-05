@@ -74,10 +74,10 @@
                             <th class="col-total">合計</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @foreach (var eng in _engineers)
-                        {
-                            var engThemes = SortedThemes.ToList();
+                    @foreach (var eng in _engineers)
+                    {
+                        var engThemes = SortedThemes.ToList();
+                        <tbody class="eng-group">
                             @for (int ti = 0; ti < engThemes.Count; ti++)
                             {
                                 var theme = engThemes[ti];
@@ -95,7 +95,9 @@
                                     {
                                         var cy = y; var cm = m;
                                         var pastDeadline = IsMonthPastDeadline(theme, cy, cm);
-                                        <td class="cell-input @(pastDeadline ? "cell-past-deadline" : "")">
+                                        var themeOverBudget = IsThemeOverBudget(themeId);
+                                        var cellCss = pastDeadline ? "cell-past-deadline" : themeOverBudget ? "cell-theme-over-budget" : "";
+                                        <td class="cell-input @cellCss">
                                             <input type="number" class="alloc-input" min="0" step="5"
                                                    value="@((int)GetAlloc(engId, themeId, cy, cm))"
                                                    @onchange="@(async e => await OnAllocChanged(engId, themeId, cy, cm, e.Value?.ToString()))" />
@@ -131,18 +133,30 @@
                                 }
                                 <td></td>
                             </tr>
-                        }
-                    </tbody>
+                        </tbody>
+                        <tbody><tr><td colspan="@(_periodMonths.Count + 3)" class="group-gap"></td></tr></tbody>
+                    }
                 </table>
             </div>
         </MudPaper>
 
         <!-- ===== テーマビュー ===== -->
         <MudPaper Class="pa-3 forecast-panel" Elevation="2">
-            <MudText Typo="Typo.h6" Class="mb-2">
-                <MudIcon Icon="@Icons.Material.Filled.Topic" Class="mr-1" />
-                テーマビュー
-            </MudText>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Spacing="2">
+                <MudText Typo="Typo.h6" Class="flex-grow-1">
+                    <MudIcon Icon="@Icons.Material.Filled.Topic" Class="mr-1" />
+                    テーマビュー
+                </MudText>
+                <MudSelect T="string" MultiSelection="true" SelectedValues="_selectedTags"
+                           SelectedValuesChanged="OnTagFilterChanged"
+                           Label="タグで絞り込み" Placeholder="すべて" Style="width:200px"
+                           Dense="true" Clearable="true">
+                    @foreach (var tag in AllTags)
+                    {
+                        <MudSelectItem T="string" Value="@tag">@tag</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
             <div style="overflow-x:auto;">
                 <table class="forecast-table">
                     <thead>
@@ -156,11 +170,15 @@
                             <th class="col-total">合計</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @foreach (var theme in SortedThemes)
-                        {
-                            var themeEngineers = _engineers.ToList();
-                            var currentThemeId = theme.Id;
+                    @foreach (var theme in SortedThemes)
+                    {
+                        var themeEngineers = _engineers.ToList();
+                        var currentThemeId = theme.Id;
+                        var periodCost2 = GetThemePeriodCost(theme.Id, theme.OrderType);
+                        var carryOver2 = GetCarryOver(theme.Id);
+                        var totalCost2 = periodCost2 + carryOver2;
+                        var isOverBudget2 = theme.OrderAmount > 0 && totalCost2 > theme.OrderAmount;
+                        <tbody class="theme-group">
                             <!-- 合計（目標）行 -->
                             <tr class="row-theme-target">
                                 <td rowspan="@(themeEngineers.Count + 1)" class="cell-group-name">
@@ -210,7 +228,9 @@
                                     {
                                         var cy = y; var cm = m;
                                         var pastDeadline = IsMonthPastDeadline(theme, cy, cm);
-                                        <td class="cell-input @(pastDeadline ? "cell-past-deadline" : "")">
+                                        var engOver = IsOverCapacity(engId, cy, cm);
+                                        var cellCss = pastDeadline ? "cell-past-deadline" : engOver ? "cell-eng-over-capacity" : "";
+                                        <td class="cell-input @cellCss">
                                             <input type="number" class="alloc-input" min="0" step="5"
                                                    value="@((int)GetAlloc(engId, themeId, cy, cm))"
                                                    @onchange="@(async e => await OnAllocChanged(engId, themeId, cy, cm, e.Value?.ToString()))" />
@@ -238,10 +258,6 @@
                                 <td>@FormatHours(GetThemeTotal(theme.Id))</td>
                             </tr>
                             <!-- テーマコスト試算行 -->
-                            var periodCost2 = GetThemePeriodCost(theme.Id, theme.OrderType);
-                            var carryOver2 = GetCarryOver(theme.Id);
-                            var totalCost2 = periodCost2 + carryOver2;
-                            var isOverBudget2 = theme.OrderAmount > 0 && totalCost2 > theme.OrderAmount;
                             <tr class="@(isOverBudget2 ? "row-over-budget" : "row-theme-cost")">
                                 <td colspan="@(2 + _periodMonths.Count + 1)">
                                     @if (isOverBudget2)
@@ -255,8 +271,9 @@
                                     }
                                 </td>
                             </tr>
-                        }
-                    </tbody>
+                        </tbody>
+                        <tbody><tr><td colspan="@(_periodMonths.Count + 3)" class="group-gap"></td></tr></tbody>
+                    }
                 </table>
             </div>
         </MudPaper>
@@ -275,14 +292,32 @@
 
     private string _sortKey = "OrderDate";
     private bool _sortAscending = false;
+    private HashSet<string> _selectedTags = new();
 
-    private IEnumerable<Theme> SortedThemes => _sortKey switch
+    private void OnTagFilterChanged(IEnumerable<string> values)
     {
-        "Name"                    => _sortAscending ? _themes.OrderBy(t => t.Name)                    : _themes.OrderByDescending(t => t.Name),
-        "EstimatedCompletionDate" => _sortAscending ? _themes.OrderBy(t => t.EstimatedCompletionDate) : _themes.OrderByDescending(t => t.EstimatedCompletionDate),
-        "OrderAmount"             => _sortAscending ? _themes.OrderBy(t => t.OrderAmount)             : _themes.OrderByDescending(t => t.OrderAmount),
-        _                         => _sortAscending ? _themes.OrderBy(t => t.OrderDate)               : _themes.OrderByDescending(t => t.OrderDate),
-    };
+        _selectedTags = values.ToHashSet();
+    }
+
+    private IEnumerable<string> AllTags =>
+        _themes.SelectMany(t => t.GetTagList()).Distinct().OrderBy(t => t);
+
+    private IEnumerable<Theme> SortedThemes
+    {
+        get
+        {
+            var src = _selectedTags.Count == 0
+                ? _themes
+                : _themes.Where(t => _selectedTags.All(tag => t.GetTagList().Contains(tag)));
+            return _sortKey switch
+            {
+                "Name"                    => _sortAscending ? src.OrderBy(t => t.Name)                    : src.OrderByDescending(t => t.Name),
+                "EstimatedCompletionDate" => _sortAscending ? src.OrderBy(t => t.EstimatedCompletionDate) : src.OrderByDescending(t => t.EstimatedCompletionDate),
+                "OrderAmount"             => _sortAscending ? src.OrderBy(t => t.OrderAmount)             : src.OrderByDescending(t => t.OrderAmount),
+                _                         => _sortAscending ? src.OrderBy(t => t.OrderDate)               : src.OrderByDescending(t => t.OrderDate),
+            };
+        }
+    }
 
     // Key: (EngineerId, ThemeId, Year, Month)
     private Dictionary<(int, int, int, int), decimal> _allocMap = new();
@@ -574,6 +609,15 @@
         var cap = GetCapacity(engId, year, month);
         var total = GetEngineerMonthTotal(engId, year, month);
         return cap > 0 && total < cap * 0.9m;
+    }
+
+    /// <summary>テーマのコスト試算が受注金額を超えているか</summary>
+    private bool IsThemeOverBudget(int themeId)
+    {
+        var theme = _themes.FirstOrDefault(t => t.Id == themeId);
+        if (theme == null || theme.OrderAmount <= 0 || theme.OrderType == "その他") return false;
+        var cost = GetThemePeriodCost(themeId, theme.OrderType) + GetCarryOver(themeId);
+        return cost > theme.OrderAmount;
     }
 
     // ===== テーマ完了予定月・コスト =====
